@@ -1,9 +1,9 @@
 mod args;
 mod field_pos;
-mod matrix2d;
+mod board;
 mod knight;
 use knight::Knight;
-use matrix2d::Matrix2D;
+use board::Board;
 use args::Args;
 use clap::Parser;
 
@@ -27,7 +27,7 @@ fn main() {
     // Initialize the board and the knight
     // The board is a 2D matrix of booleans, where true means the knight has visited the field
     // The knight is a struct that holds the current position of the knight and various methods to move it around as well as calculate possible moves
-    let mut board = Matrix2D::new(args.field.width(), args.field.height(), 0u32);
+    let mut board = Board::new(args.field.width(), args.field.height(), 0u32);
     let mut knight = Knight::new(args.starting_pos);
 
     if !board.is_in_range(args.starting_pos) {

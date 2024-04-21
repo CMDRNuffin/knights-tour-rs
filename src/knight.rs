@@ -1,4 +1,4 @@
-use crate::{field_pos::FieldPos, matrix2d::Matrix2D};
+use crate::{field_pos::FieldPos, board::Board};
 
 #[derive(Clone, Copy)]
 pub struct Knight {
@@ -18,7 +18,7 @@ impl Knight {
         Knight { position: new_pos }
     }
 
-    pub fn get_possible_moves(&self, board: &Matrix2D<u32>) -> Vec<FieldPos> {
+    pub fn get_possible_moves(&self, board: &Board) -> Vec<FieldPos> {
         let mut moves = Vec::new();
         let mut add_move = |pos| {
             let pos = if let Some(pos) = pos { pos } else { return; };
