@@ -29,6 +29,11 @@ fn main() {
     // The knight is a struct that holds the current position of the knight and various methods to move it around as well as calculate possible moves
     let mut board = Matrix2D::new(args.field.width(), args.field.height(), 0u32);
     let mut knight = Knight::new(args.starting_pos);
+
+    if !board.is_in_range(args.starting_pos) {
+        println!("Invalid starting position");
+        return;
+    }
     
     let mut moves = 1;
     *board.at_mut(args.starting_pos) = moves;
@@ -49,6 +54,7 @@ fn main() {
             *board.at_mut(next_move) = moves;
             knight.update_position(next_move);
         } else {
+            // todo: backtracking
             break;
         }
     }
