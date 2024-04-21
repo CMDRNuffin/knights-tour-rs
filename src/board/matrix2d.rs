@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{args::field_size::FieldSize, board_pos::BoardPos};
+use crate::{args::board_size::BoardSize, board_pos::BoardPos};
 
 pub struct Matrix2D<T>
     where T: Copy {
@@ -28,8 +28,8 @@ impl<T> Matrix2D<T>
         pos.col() < self.w && pos.row() < self.h
     }
 
-    pub fn size(&self) -> FieldSize {
-        FieldSize::new(self.w, self.h)
+    pub fn size(&self) -> BoardSize {
+        BoardSize::new(self.w, self.h)
     }
 }
 

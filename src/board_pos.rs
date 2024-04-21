@@ -135,6 +135,6 @@ impl TryFrom<&str> for BoardPos {
     }
 }
 
-pub fn parse_field_pos(arg: &str) -> Result<BoardPos, String> {
+pub fn parse_board_pos(arg: &str) -> Result<BoardPos, String> {
     arg.try_into()
 }

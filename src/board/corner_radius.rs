@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::{args::field_size::FieldSize, board_pos::BoardPos};
+use crate::{args::board_size::BoardSize, board_pos::BoardPos};
 
 pub use super::corner::Corner;
 
@@ -22,7 +22,7 @@ impl CornerRadius {
         }
     }
 
-    pub fn is_in_range (&self, pos: BoardPos, size: FieldSize) -> bool {
+    pub fn is_in_range (&self, pos: BoardPos, size: BoardSize) -> bool {
         if pos.col() > size.width() || pos.row() > size.height() {
             return false;
         }

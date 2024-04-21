@@ -1,12 +1,12 @@
 use std::fmt::Display;
 
 #[derive(Copy, Clone)]
-pub struct FieldSize {
+pub struct BoardSize {
     width: u16,
     height: u16,
 }
 
-impl FieldSize {
+impl BoardSize {
     pub fn width(&self) -> u16 {
         self.width
     }
@@ -15,12 +15,12 @@ impl FieldSize {
         self.height
     }
     
-    pub fn new(w: u16, h: u16) -> FieldSize {
-        FieldSize { width: w, height: h }
+    pub fn new(w: u16, h: u16) -> BoardSize {
+        BoardSize { width: w, height: h }
     }
 }
 
-impl Display for FieldSize {
+impl Display for BoardSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = self.width;
         let h = self.height;
@@ -29,7 +29,7 @@ impl Display for FieldSize {
     }
 }
 
-impl TryFrom<&str> for FieldSize {
+impl TryFrom<&str> for BoardSize {
     type Error = String;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut w = None;
@@ -58,10 +58,10 @@ impl TryFrom<&str> for FieldSize {
         }
         let h = h.unwrap();
 
-        Ok(FieldSize { width: w, height: h })
+        Ok(BoardSize { width: w, height: h })
     }
 }
 
-pub fn parse_field_size(arg: &str) -> Result<FieldSize, String> {
+pub fn parse_board_size(arg: &str) -> Result<BoardSize, String> {
     arg.try_into()
 }
