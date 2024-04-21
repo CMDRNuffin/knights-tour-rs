@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::field_pos::FieldPos;
+use crate::{args::field_size::FieldSize, board_pos::BoardPos};
 
 pub struct Matrix2D<T>
     where T: Copy {
@@ -16,20 +16,25 @@ impl<T> Matrix2D<T>
         Matrix2D { data, w, h, }
     }
 
-    pub fn at(&self, pos: FieldPos) -> &T {
+    pub fn at(&self, pos: BoardPos) -> &T {
         &self.data[pos.col() as usize][pos.row() as usize]
     }
 
-    pub fn at_mut(&mut self, pos: FieldPos) -> &mut T {
+    pub fn at_mut(&mut self, pos: BoardPos) -> &mut T {
         &mut self.data[pos.col() as usize][pos.row() as usize]
     }
 
-    pub fn is_in_range(&self, pos: FieldPos) -> bool {
+    pub fn is_in_range(&self, pos: BoardPos) -> bool {
         pos.col() < self.w && pos.row() < self.h
+    }
+
+    pub fn size(&self) -> FieldSize {
+        FieldSize::new(self.w, self.h)
     }
 }
 
-impl Display for Matrix2D<u32> {
+impl<T> Display for Matrix2D<T>
+    where T: Display + Copy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let max = self.h as u32 * self.w as u32;
         let max_len = max.to_string().len();
@@ -45,7 +50,7 @@ impl Display for Matrix2D<u32> {
             Ok(())
         };
 
-        let pad = |f: &mut std::fmt::Formatter<'_>, val: u32| -> std::fmt::Result {
+        let pad = |f: &mut std::fmt::Formatter<'_>, val: T| -> std::fmt::Result {
             let padding = max_len - val.to_string().len();
             for _ in 0..padding { write!(f, " ")?; }
             write!(f, "{val}")?;
@@ -57,7 +62,7 @@ impl Display for Matrix2D<u32> {
         for row in 0..self.h {
             for col in 0..self.w {
                 write!(f, "| ")?;
-                pad(f, *self.at(FieldPos::new(col, row)))?;
+                pad(f, *self.at(BoardPos::new(col, row)))?;
                 write!(f, " ")?;
             }
             writeln!(f, "|")?;

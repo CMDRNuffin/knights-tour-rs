@@ -14,6 +14,10 @@ impl FieldSize {
     pub fn height(&self) -> u16 {
         self.height
     }
+    
+    pub fn new(w: u16, h: u16) -> FieldSize {
+        FieldSize { width: w, height: h }
+    }
 }
 
 impl Display for FieldSize {

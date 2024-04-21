@@ -1,12 +1,12 @@
 use std::{fmt::Display, ops::{Add, Sub}};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct FieldPos {
+pub struct BoardPos {
     col: u16,
     row: u16,
 }
 
-impl FieldPos {
+impl BoardPos {
     pub fn new(col: u16, row: u16) -> Self {
         Self {
             row,
@@ -35,7 +35,7 @@ impl FieldPos {
     }
 }
 
-impl Display for FieldPos {
+impl Display for BoardPos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = alphabetize(self.col + 1);
         let h = self.row + 1;
@@ -73,12 +73,12 @@ fn test_alphabetize() {
     assert_eq!("BA", alphabetize(53));
     assert_eq!("ZZZ", alphabetize(18278));
 
-    assert_eq!(FieldPos::try_from("A-1").unwrap().col, 1);
-    assert_eq!(FieldPos::try_from("Z-1").unwrap().col, 26);
-    assert_eq!(FieldPos::try_from("AA-1").unwrap().col, 27);
-    assert_eq!(FieldPos::try_from("AZ-1").unwrap().col, 52);
-    assert_eq!(FieldPos::try_from("BA-1").unwrap().col, 53);
-    assert_eq!(FieldPos::try_from("ZZZ-1").unwrap().col, 18278);
+    assert_eq!(BoardPos::try_from("A-1").unwrap().col, 1);
+    assert_eq!(BoardPos::try_from("Z-1").unwrap().col, 26);
+    assert_eq!(BoardPos::try_from("AA-1").unwrap().col, 27);
+    assert_eq!(BoardPos::try_from("AZ-1").unwrap().col, 52);
+    assert_eq!(BoardPos::try_from("BA-1").unwrap().col, 53);
+    assert_eq!(BoardPos::try_from("ZZZ-1").unwrap().col, 18278);
 }
 
 struct C(char);
@@ -106,7 +106,7 @@ impl Add<u16> for C {
     }
 }
 
-impl TryFrom<&str> for FieldPos {
+impl TryFrom<&str> for BoardPos {
     type Error = String;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -131,10 +131,10 @@ impl TryFrom<&str> for FieldPos {
         if row < 1 { return Err("Invalid row: 0".into()); }
 
         // 0-index, but 1-display
-        Ok(FieldPos{ col: col - 1, row: row - 1 })
+        Ok(BoardPos{ col: col - 1, row: row - 1 })
     }
 }
 
-pub fn parse_field_pos(arg: &str) -> Result<FieldPos, String> {
+pub fn parse_field_pos(arg: &str) -> Result<BoardPos, String> {
     arg.try_into()
 }
