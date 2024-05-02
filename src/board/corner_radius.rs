@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::{args::board_size::BoardSize, board_pos::BoardPos};
+use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, args::board_size::BoardSize, board_pos::BoardPos};
 
 pub use super::corner::Corner;
 
@@ -13,21 +13,12 @@ pub struct CornerRadius {
 }
 
 impl CornerRadius {
-    pub fn new(top_left: u16, top_right: u16, bottom_right: u16, bottom_left: u16) -> Self {
-        Self {
-            top_left: Corner::new(top_left, top_left),
-            top_right: Corner::new(top_right, top_right),
-            bottom_right: Corner::new(bottom_right, bottom_right),
-            bottom_left: Corner::new(bottom_left, bottom_left),
-        }
-    }
-
     pub fn is_in_range (&self, pos: BoardPos, size: BoardSize) -> bool {
         if pos.col() > size.width() || pos.row() > size.height() {
             return false;
         }
 
-        let (w, h) = (size.width() as i32, size.height() as i32);
+        let (w, h) = (size.width() as IdxMath, size.height() as IdxMath);
         let square = |v| v * v;
 
         let is_in_corner = |ellipsis_size: Corner, point: BoardPos, sector: u8| {
@@ -36,8 +27,8 @@ impl CornerRadius {
             }
 
             // center of the ellipsis is width -1 & height -1 away from the appropriate corner based on the sector
-            let (e_w, e_h) = (ellipsis_size.horizontal() as i32, ellipsis_size.vertical() as i32);
-            let center: (i32, i32) = match sector {
+            let (e_w, e_h) = (ellipsis_size.horizontal() as IdxMath, ellipsis_size.vertical() as IdxMath);
+            let center = match sector {
                 0 => (e_w - 1, e_h - 1),
                 1 => (w - e_w, e_h - 1),
                 2 => (w - e_w, h - e_h),
@@ -45,7 +36,7 @@ impl CornerRadius {
                 _ => unreachable!(),
             };
 
-            let point: (i32, i32) = (point.col() as i32, point.row() as i32);
+            let point = (point.col() as IdxMath, point.row() as IdxMath);
 
             // ellipsis calculation (scale y axis to x axis for the ellipsis and the point, then compare the distance via pythagoras)
             // p = point, c = center, s = size
@@ -69,10 +60,6 @@ impl CornerRadius {
         && !is_in_corner(self.top_right.into(), pos, 1)
         && !is_in_corner(self.bottom_right.into(), pos, 2)
         && !is_in_corner(self.bottom_left.into(), pos, 3)
-    }
-
-    pub fn zero() -> Self {
-        Self::new(0, 0, 0, 0)
     }
 
     #[cfg(test)]
@@ -125,7 +112,7 @@ impl TryFrom<&str> for CornerRadius {
         let mut iter = value.chars().peekable();
         let mut corners = Vec::new();
         let mut state = ParseState::Start;
-        let mut buf = (0u16, 0u16);
+        let mut buf: (Idx, Idx) = (0, 0);
 
         while let Some(c) = iter.peek().copied() {
             macro_rules! consume {
@@ -147,7 +134,7 @@ impl TryFrom<&str> for CornerRadius {
                 },
                 ParseState::Number => {
                     if consume!(c.is_numeric()) {
-                        buf.0 = buf.0 * 10 + c.to_digit(10).unwrap() as u16;
+                        buf.0 = buf.0 * 10 + c.to_digit(10).unwrap() as Idx;
                         buf.1 = buf.0;
                     } else {
                         corners.push(buf.into());
@@ -166,7 +153,7 @@ impl TryFrom<&str> for CornerRadius {
                 },
                 ParseState::Group(0) => {
                     if consume!(c.is_numeric()) {
-                        buf.0 = buf.0 * 10 + c.to_digit(10).unwrap() as u16;
+                        buf.0 = buf.0 * 10 + c.to_digit(10).unwrap() as Idx;
                     } else if consume!(',') || consume!(c.is_whitespace()) {
                         state = ParseState::GroupBetween;
                     }
@@ -174,7 +161,7 @@ impl TryFrom<&str> for CornerRadius {
                 },
                 ParseState::Group(1) => {
                     if consume!(c.is_numeric()) {
-                        buf.1 = buf.1 * 10 + c.to_digit(10).unwrap() as u16;
+                        buf.1 = buf.1 * 10 + c.to_digit(10).unwrap() as Idx;
                     } else {
                         state = ParseState::GroupEnd;
                     }
@@ -208,7 +195,7 @@ impl TryFrom<&str> for CornerRadius {
 
 #[test]
 fn test_corner_radius_parsing() {
-    let test_ok = |input, expected: ((u16, u16), (u16, u16), (u16, u16), (u16,u16))| {
+    let test_ok = |input, expected: ((Idx, Idx), (Idx, Idx), (Idx, Idx), (Idx, Idx))| {
         let result = CornerRadius::try_from(input).expect(&format!("Failed to parse {input}"));
         println!("{input} -> {result:?} == {expected:?}");
         assert_eq!(result.top_left().vertical(), expected.0.0, "Top left v");

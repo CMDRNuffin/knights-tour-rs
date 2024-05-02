@@ -1,31 +1,29 @@
+use crate::aliases::BoardIndex as Idx;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Corner {
-    v: u16,
-    h: u16,
+    v: Idx,
+    h: Idx,
 }
 
 impl Corner {
-    pub fn new(v: u16, h: u16) -> Self {
-        Self { v, h }
-    }
-
-    pub fn vertical(&self) -> u16 {
+    pub fn vertical(&self) -> Idx {
         self.v
     }
 
-    pub fn horizontal(&self) -> u16 {
+    pub fn horizontal(&self) -> Idx {
         self.h
     }
 }
 
-impl From<(u16, u16)> for Corner {
-    fn from((v, h): (u16, u16)) -> Self {
+impl From<(Idx, Idx)> for Corner {
+    fn from((v, h): (Idx, Idx)) -> Self {
         Self { v, h }
     }
 }
 
-impl From<u16> for Corner {
-    fn from(val: u16) -> Self {
+impl From<Idx> for Corner {
+    fn from(val: Idx) -> Self {
         Self { v: val, h: val }
     }
 }

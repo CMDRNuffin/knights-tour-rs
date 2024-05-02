@@ -1,4 +1,4 @@
-use crate::{board_pos::BoardPos, board::Board};
+use crate::{board_pos::BoardPos, debug_output, dprintln};
 
 #[derive(Clone, Copy)]
 pub struct Knight {
@@ -18,16 +18,24 @@ impl Knight {
         Knight { position: new_pos }
     }
 
-    pub fn get_possible_moves(&self, board: &Board, mut skip: u8) -> Vec<BoardPos> {
-        // skipping all moves
-        if skip >= 8 { return Vec::new(); }
+    pub fn get_possible_moves(&self, reachable: &impl Fn(BoardPos, BoardPos) -> bool) -> Vec<BoardPos> {
+        let mut possible_moves = self.get_possible_moves_impl(reachable);
 
+        const MOVES_AHEAD: u8 = 1;
+        possible_moves.sort_by_cached_key(|pos| match self.clone_to(*pos).possible_moves_count(&reachable, MOVES_AHEAD){
+            n if n < MOVES_AHEAD as usize => usize::MAX,
+            n => n
+        });
+
+        possible_moves
+    }
+
+    fn get_possible_moves_impl(&self, reachable: &impl Fn(BoardPos, BoardPos) -> bool) -> Vec<BoardPos> {
         let mut moves = Vec::new();
         let mut add_move = |pos| {
             let pos = if let Some(pos) = pos { pos } else { return; };
-            if board.is_in_range(pos) && *board.at(pos) == 0 {
-                if skip > 0 { skip -= 1; }
-                else { moves.push(pos); }
+            if reachable(self.position, pos) {
+                moves.push(pos);
             }
         };
 
@@ -43,14 +51,23 @@ impl Knight {
         moves
     }
 
-    pub fn possible_moves_count(&self, board: &Board, moves_ahead: u8) -> usize {
+    pub fn possible_moves_count(&self, reachable: &impl Fn(BoardPos, BoardPos) -> bool, moves_ahead: u8) -> usize {
         if moves_ahead == 0 { return 0; }
 
-        let moves = self.get_possible_moves(board, 0);
-        if moves_ahead == 1 { return moves.len(); }
+        let moves = debug_output::suspended(||
+            self.get_possible_moves_impl(reachable)
+        );
+        if moves_ahead == 1 {
+            dprintln!("{} -> {} moves", self.position, moves.len());
+            return moves.len();
+        }
 
-        moves.iter()
-            .map(|pos| self.clone_to(*pos).possible_moves_count(board, moves_ahead - 1))
-            .sum()
+        let move_count = debug_output::suspended(||
+            moves.iter()
+                .map(|pos| self.clone_to(*pos).possible_moves_count(reachable, moves_ahead - 1))
+                .sum()
+        );
+        dprintln!("{} -> {} moves", self.position, move_count);
+        move_count
     }
 }

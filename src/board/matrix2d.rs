@@ -1,18 +1,19 @@
 use std::fmt::Display;
 
-use crate::{args::board_size::BoardSize, board_pos::BoardPos};
+use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, args::board_size::BoardSize, board_pos::BoardPos};
 
+#[derive(Debug, Clone)]
 pub struct Matrix2D<T>
-    where T: Copy {
+where T: Clone {
     data: Box<[Box<[T]>]>,
-    w: u16,
-    h: u16,
+    w: Idx,
+    h: Idx,
 }
 
 impl<T> Matrix2D<T>
-    where T: Copy {
-    pub fn new(w: u16, h: u16, value: T) -> Self {
-        let data = make_slice(w, |_| make_slice(h, |_| value));
+where T: Clone {
+    pub fn new(w: Idx, h: Idx, f: impl Fn() -> T) -> Self {
+        let data = make_slice(w, &|| make_slice(h, &f));
         Matrix2D { data, w, h, }
     }
 
@@ -31,12 +32,54 @@ impl<T> Matrix2D<T>
     pub fn size(&self) -> BoardSize {
         BoardSize::new(self.w, self.h)
     }
+
+    pub fn iter(&self) -> Matrix2DIterator<T> {
+        Matrix2DIterator { matrix: self, col: 0, row: 0 }
+    }
+}
+
+pub struct Matrix2DIterator<'a, T>
+where T: Clone {
+    matrix: &'a Matrix2D<T>,
+    col: Idx,
+    row: Idx,
+}
+
+impl<'a, T> Iterator for Matrix2DIterator<'a, T>
+where T: Clone {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.row == self.matrix.h {
+            return None;
+        }
+
+        let pos = BoardPos::new(self.col, self.row);
+        let val = self.matrix.at(pos);
+        self.col += 1;
+        if self.col == self.matrix.w {
+            self.col = 0;
+            self.row += 1;
+        }
+
+        Some(val)
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Matrix2D<T>
+where T: Clone {
+    type Item = &'a T;
+    type IntoIter = Matrix2DIterator<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
 }
 
 impl<T> Display for Matrix2D<T>
-    where T: Display + Copy {
+where T: Display + Copy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let max = self.h as u32 * self.w as u32;
+        let max = self.h as IdxMath * self.w as IdxMath;
         let max_len = max.to_string().len();
 
         let border = |f: &mut std::fmt::Formatter<'_>| -> std::fmt::Result {
@@ -72,12 +115,12 @@ impl<T> Display for Matrix2D<T>
     }
 }
 
-fn make_slice<T, F>(len: u16, f: F) -> Box<[T]>
-    where F: Fn(u16) -> T {
+fn make_slice<T, F>(len: Idx, f: &F) -> Box<[T]>
+where F: Fn() -> T {
     let mut slice = Vec::<T>::with_capacity(len as usize);
     let mut idx = 0;
     slice.resize_with(len as usize, ||{
-        let r = f(idx);
+        let r = f();
         idx += 1;
         r
     });

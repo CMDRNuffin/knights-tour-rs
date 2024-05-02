@@ -1,22 +1,36 @@
 use std::fmt::Display;
 
+use crate::aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath};
+
 #[derive(Copy, Clone)]
 pub struct BoardSize {
-    width: u16,
-    height: u16,
+    width: Idx,
+    height: Idx,
 }
 
 impl BoardSize {
-    pub fn width(&self) -> u16 {
+    pub fn width(&self) -> Idx {
         self.width
     }
 
-    pub fn height(&self) -> u16 {
+    pub fn height(&self) -> Idx {
         self.height
     }
     
-    pub fn new(w: u16, h: u16) -> BoardSize {
+    pub fn new(w: Idx, h: Idx) -> BoardSize {
         BoardSize { width: w, height: h }
+    }
+    
+    pub fn with_height(self, height: Idx) -> BoardSize {
+        BoardSize { height, ..self }
+    }
+
+    pub fn with_width(self, width: Idx) -> BoardSize {
+        BoardSize { width, ..self }
+    }
+    
+    pub fn area(&self) -> IdxMath {
+        self.width as IdxMath * self.height as IdxMath
     }
 }
 
@@ -29,6 +43,18 @@ impl Display for BoardSize {
     }
 }
 
+impl From<(Idx, Idx)> for BoardSize {
+    fn from(value: (Idx, Idx)) -> Self {
+        BoardSize { width: value.0, height: value.1 }
+    }
+}
+
+impl From<BoardSize> for (Idx, Idx) {
+    fn from(value: BoardSize) -> Self {
+        (value.width, value.height)
+    }
+}
+
 impl TryFrom<&str> for BoardSize {
     type Error = String;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -36,13 +62,13 @@ impl TryFrom<&str> for BoardSize {
         let mut h = None;
         for part in value.split('x') {
             if w.is_none() {
-                w = match part.parse::<u16>() {
+                w = match part.parse::<Idx>() {
                     Ok(val) => Some(val),
                     Err(e) => return Err(e.to_string()),
                 };
             }
             else if h.is_none() {
-                h = match part.parse::<u16>() {
+                h = match part.parse::<Idx>() {
                     Ok(val) => Some(val),
                     Err(e) => return Err(e.to_string()),
                 };
