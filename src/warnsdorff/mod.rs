@@ -8,7 +8,7 @@ mod move_tracker;
 use move_tracker::MoveTracker;
 
 pub fn solve(args: Args) -> Option<(Duration, Board)> {
-    let result = solve_internal_impl(args.field.into(), Mode::Basic(args))?;
+    let result = solve_internal_impl(args.board_size?.into(), Mode::Basic(args))?;
     Some((result.1, result.0.to_board().with_dead_squares(result.2)))
 }
 
@@ -24,21 +24,29 @@ pub enum StructureMode {
     Stretched(Direction),
 }
 
-static mut STRETCHED_CACHE: OnceLock<HashMap<(Idx, Idx, Direction), MoveGraph>> = OnceLock::new();
+static mut STRETCHED_CACHE: OnceLock<HashMap<(BoardSize, Direction), MoveGraph>> = OnceLock::new();
 
-fn get_stretched_cached(size: (Idx, Idx), direction: Direction) -> Option<MoveGraph> {
+fn get_stretched_cached<'a>(size: BoardSize, direction: Direction) -> Option<&'a MoveGraph<'a>> {
     let cache = unsafe { STRETCHED_CACHE.get()? };
-    cache.get(&(size.0, size.1, direction)).cloned()
+    cache.get(&(size, direction))
 }
 
-pub fn solve_internal(size: (Idx, Idx), mode: Mode) -> Option<(MoveGraph, Duration)> {
+pub fn solve_internal<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph<'a>, Duration)> {
     solve_internal_impl(size, mode).map(|(graph, duration, _)|(graph, duration))
 }
 
-pub fn solve_internal_impl(size: (Idx, Idx), mode: Mode) -> Option<(MoveGraph, Duration, HashSet<BoardPos>)> {
-    let mut dead_squares: HashSet<BoardPos> = HashSet::new();
-    let mut end_point = Some(BoardPos::new(0, 0));
-    let mut pos = BoardPos::new(0, 0);
+struct SolveParams {
+    dead_squares: HashSet<BoardPos>,
+    end_point: Option<BoardPos>,
+    pos: BoardPos,
+    cache: bool,
+    direction: Direction,
+}
+
+fn parse_mode(mode: &Mode) -> Option<SolveParams> {
+    let end_point;
+    let mut dead_squares = HashSet::new();
+    let pos;
     let cache;
     let mut direction = Direction::Horizontal;
     match mode {
@@ -48,55 +56,79 @@ pub fn solve_internal_impl(size: (Idx, Idx), mode: Mode) -> Option<(MoveGraph, D
                 return None;
             }
 
-            pos = args.starting_pos.into();
+            pos = args.warnsdorff.as_ref().unwrap().starting_pos.unwrap().into();
             cache = false;
         },
         Mode::Structured(StructureMode::Closed(skip_corner)) => {
             cache = false;
-            if skip_corner {
-                dead_squares.insert(pos);
+            if *skip_corner {
+                dead_squares.insert(BoardPos::new(0, 0));
                 pos = BoardPos::new(1, 0);
-                end_point = Some(pos);
-            }
-        },
-        Mode::Structured(StructureMode::Stretched(dir)) => {
-            if let Some(cached) = get_stretched_cached(size, dir) {
-                return Some((cached, Duration::ZERO, HashSet::new()));
+            } else {
+                pos = BoardPos::new(0, 0);
             }
 
-            direction = dir;
+            end_point = Some(pos);
+        },
+        Mode::Structured(StructureMode::Stretched(dir)) => {
+            direction = *dir;
             end_point = if matches!(direction, Direction::Horizontal)  { Some(BoardPos::new(0, 1)) } else { Some(BoardPos::new(1, 0)) };
             cache = true;
+            pos = BoardPos::new(0, 0);
         },
         Mode::Freeform /* very small board, no structured/closed tour possible */ => {
             cache = true;
             end_point = None;
+            pos = BoardPos::new(0, 0);
         },
     }
 
-    let mut graph = MoveGraph::new(size.0, size.1);
-    *graph.node_mut(pos).prev_mut() = Some(pos); // mark start as visited and start
-    let mut knight = Knight::new(pos);
+    Some(SolveParams {
+        dead_squares,
+        end_point,
+        pos,
+        cache,
+        direction
+    })
+}
+
+pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph<'a>, Duration, HashSet<BoardPos>)> {
+    let SolveParams {
+        dead_squares,
+        end_point,
+        pos: start_pos,
+        cache,
+        direction
+    } = parse_mode(&mode)?;
+
+    if cache {
+        if let Some(cached) = get_stretched_cached(size, direction) {
+            return Some((MoveGraph::ref_to(cached), Duration::ZERO, HashSet::new()));
+        }
+    }
+
+    let mut graph = MoveGraph::new(size.width(), size.height());
+    *graph.node_mut(start_pos).prev_mut() = Some(start_pos); // mark start as visited and start
+    let mut knight = Knight::new(start_pos);
 
     let predetermined_moves = preconnect_corners(&graph, mode);
 
     let expected_move_count = (graph.width() * graph.height() - dead_squares.len() as Idx) as usize
-        + if end_point.is_some() { 1 } else { 0 };
+        - if end_point.is_some() && end_point == Some(start_pos) { 0 } else { 1 };
     dprintln!("Expected move count: {expected_move_count}.");
 
     let mut moves = vec![ 0 ];
 
     let now = Instant::now();
     let mut count: usize = 0;
-    let start_pos = pos;
     let mut move_tracker = MoveTracker::new(expected_move_count);
-    move_tracker.push(pos);
+    move_tracker.push(start_pos);
 
-    while moves.len() < expected_move_count {
+    while moves.len() <= expected_move_count {
         count += 1;
         let skip = moves.last().copied().unwrap();
 
-        let target = if moves.len() == expected_move_count - 1 { end_point } else { None };
+        let target = if moves.len() == expected_move_count { end_point } else { None };
 
         let checker = ReachabilityChecker {
             target,
@@ -105,6 +137,7 @@ pub fn solve_internal_impl(size: (Idx, Idx), mode: Mode) -> Option<(MoveGraph, D
             graph: &graph,
             start: start_pos,
             predetermined_moves: &predetermined_moves,
+            move_to_end_allowed: expected_move_count - moves.len() < 3,
         };
         let reachable = |from, to| checker.reachable(from, to);
 
@@ -118,15 +151,14 @@ pub fn solve_internal_impl(size: (Idx, Idx), mode: Mode) -> Option<(MoveGraph, D
         if let Some(next_move) = next_move {
             moves.push(0);
 
-            let current_node = graph.node_mut(pos);
+            let current_node = graph.node_mut(knight.position());
             *current_node.next_mut() = Some(next_move);
 
             let next_node = graph.node_mut(next_move);
-            *next_node.prev_mut() = Some(pos);
+            *next_node.prev_mut() = Some(knight.position());
 
             knight.update_position(next_move);
-            pos = next_move;
-            move_tracker.push(pos);
+            move_tracker.push(next_move);
             dprintln!("Move #{count}:");
             dprintln!("{move_tracker}");
             dprintln!("{graph}");
@@ -139,22 +171,21 @@ pub fn solve_internal_impl(size: (Idx, Idx), mode: Mode) -> Option<(MoveGraph, D
             // skip the last move
             *prev_move += 1;
 
-            let current_node = graph.node_mut(pos);
+            let current_node = graph.node_mut(knight.position());
             if let Some(prev_pos) = current_node.prev_mut().take(){
                 let prev_node = graph.node_mut(prev_pos);
                 *prev_node.next_mut() = None;
-                pos = prev_pos;
                 knight.update_position(prev_pos);
             }
             else {
-                dprintln!("Move #{count}: return from {pos}");
+                dprintln!("Move #{count}: return from {}", knight.position());
                 dprintln!("{graph}");
                 dprintln!();
 
-                panic!("No previous move found for {pos}!");
+                panic!("No previous move found for {}!", knight.position());
             }
 
-            dprintln!("Move #{count}: return to {pos}");
+            dprintln!("Move #{count}: return to {}", knight.position());
             dprintln!("{move_tracker}");
             dprintln!("{graph}");
             dprintln!();
@@ -170,7 +201,7 @@ pub fn solve_internal_impl(size: (Idx, Idx), mode: Mode) -> Option<(MoveGraph, D
             STRETCHED_CACHE.get_or_init(||HashMap::new());
             let cache = STRETCHED_CACHE.get_mut().unwrap();
         
-            cache.insert((size.0, size.1, direction), graph.clone());
+            cache.insert((size, direction), graph.clone());
         }
     }
 
@@ -207,7 +238,7 @@ fn preconnect_corners(graph: &MoveGraph, mode: Mode) -> HashMap<BoardPos, Vec<Bo
 
     for i in 0..3 /* skip bottom right because don't connect anything to it ever */ {
         // create structured moves
-        if i == 0 && !top_left.0 { continue; }
+        if (i == 0) & !top_left.0 { continue; }
 
         let pos = BoardPos::new(
             if w[i] == 1 { 0 } else { graph.width() - 1 },
@@ -223,7 +254,7 @@ fn preconnect_corners(graph: &MoveGraph, mode: Mode) -> HashMap<BoardPos, Vec<Bo
         }
 
         // skip top left because either we're starting there or it's dead
-        if i == 0 && !top_left.1 { continue; }
+        if (i == 0) & !top_left.1 { continue; }
         let prev = pos.try_translate(2 * w[i], h[i]).unwrap();
         add(prev, pos);
         add(pos, prev);
@@ -241,9 +272,10 @@ struct ReachabilityChecker<'a>{
     target: Option<BoardPos>,
     end_point: Option<BoardPos>,
     dead_squares: &'a HashSet<BoardPos>,
-    graph: &'a MoveGraph,
+    graph: &'a MoveGraph<'a>,
     predetermined_moves: &'a HashMap<BoardPos, Vec<BoardPos>>,
     start: BoardPos,
+    move_to_end_allowed: bool
 }
 
 impl<'a> ReachabilityChecker<'a> {
@@ -261,15 +293,15 @@ impl<'a> ReachabilityChecker<'a> {
             }
         }
 
-        if from == pos || self.start == pos {
+        if (from == pos) | (self.start == pos) {
             dprintln!("target square is {} -> false", if from == pos { "current square" } else { "starting square" });
             return false;
         }
 
         let size = BoardSize::new(self.graph.width(), self.graph.height());
         if self.dead_squares.contains(&pos)
-            || size.width() <= pos.col()
-            || size.height() <= pos.row() {
+            | (size.width() <= pos.col())
+            | (size.height() <= pos.row()) {
             dprintln!("target square is out of bounds -> false");
             return false;
         }
@@ -287,7 +319,7 @@ impl<'a> ReachabilityChecker<'a> {
             let next: HashSet<BoardPos> = next
                 .iter()
                 .copied()
-                .filter(|pos|!is_occupied(*pos) || *pos == from)
+                .filter(|pos|!is_occupied(*pos) | (*pos == from) | (Some(*pos) == self.end_point))
                 .collect();
             let len = next.len();
             if next.contains(&from) {
@@ -296,12 +328,18 @@ impl<'a> ReachabilityChecker<'a> {
             } else if len > 1 {
                 dprintln!("unrelated square to the middle of two chained predetermined move {next:?} -> false");
                 return false;
+            } else if let Some(end_point) = self.end_point {
+                if !self.move_to_end_allowed & next.contains(&end_point) {
+                    dprintln!("predetermined move to end point -> false");
+                    return false;
+                }
             }
         }
 
         if let Some(prev) = self.predetermined_moves.get(&from) {
             let res = prev.iter().all(|pos|is_occupied(*pos));
-            dprintln!("from a predetermined move {prev:?} -> {}", if res { "true" } else { "false" });
+            const BOOLS: [&str; 2] = ["false", "true"];
+            dprintln!("from a predetermined move {prev:?} -> {}", BOOLS[res as usize]);
             res
         }
         else {
@@ -312,7 +350,7 @@ impl<'a> ReachabilityChecker<'a> {
 }
 
 fn populate_dead_squares(dead_squares: &mut HashSet<BoardPos>, args: &Args) -> bool {
-    if let Some(ref path) = args.board_file {
+    if let Some(ref path) = args.warnsdorff.as_ref().unwrap().board_file {
         populate_dead_squares_from_file(dead_squares, path, args)
     }
     else {
@@ -322,12 +360,13 @@ fn populate_dead_squares(dead_squares: &mut HashSet<BoardPos>, args: &Args) -> b
 }
 
 fn populate_dead_squares_from_corner_radius(dead_squares: &mut HashSet<BoardPos>, args: &Args) {
-    let radius = if let Some(radius) = args.corner_radius { radius } else { return };
-    let w = args.field.width();
-    let h = args.field.height();
+    let radius = if let Some(radius) = args.warnsdorff.as_ref().unwrap().corner_radius { radius } else { return };
+    let size = args.board_size.unwrap();
+    let w = size.width();
+    let h = size.height();
 
     for (i, j) in (0..w).flat_map(|i| (0..h).map(move |j| (i, j))) {
-        if radius.is_in_range(BoardPos::new(i, j), args.field) {
+        if radius.is_in_range(BoardPos::new(i, j), size) {
             dead_squares.insert(BoardPos::new(i, j));
         }
     }

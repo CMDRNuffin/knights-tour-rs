@@ -10,6 +10,10 @@ impl Knight {
         Knight { position }
     }
 
+    pub fn position(&self) -> BoardPos {
+        self.position
+    }
+
     pub fn update_position(&mut self, new_pos: BoardPos) {
         self.position = new_pos;
     }

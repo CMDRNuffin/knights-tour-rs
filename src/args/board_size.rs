@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct BoardSize {
     width: Idx,
     height: Idx,

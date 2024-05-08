@@ -1,15 +1,49 @@
 use std::fmt::Display;
 
-use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board::{matrix2d::Matrix2D, Board}, board_pos::BoardPos, dprintln};
+use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board::{matrix2d::{Matrix2D, Matrix2DIterator}, Board}, board_pos::BoardPos, dprintln};
 
 #[derive(Clone, Debug)]
-pub struct MoveGraph {
-    width: Idx,
-    height: Idx,
-    nodes: Matrix2D<Node>,
+enum MoveGraphData<'a> {
+    Direct(Matrix2D<Node>),
+    Ref(&'a MoveGraph<'a>),
 }
 
-impl Display for MoveGraph {
+impl<'a> IntoIterator for &'a MoveGraphData<'a> {
+    type Item = &'a Node;
+    type IntoIter = Matrix2DIterator<'a, Node>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            MoveGraphData::Direct(matrix) => matrix.into_iter(),
+            MoveGraphData::Ref(graph) => graph.nodes.into_iter(),
+        }
+    }
+}
+
+impl<'a> MoveGraphData<'a> {
+    fn at_mut(&mut self, pos: BoardPos) -> &mut Node {
+        match self {
+            Self::Direct(matrix) => matrix.at_mut(pos),
+            Self::Ref(_) => panic!("Cannot mutate a reference to a MoveGraph"),
+        }
+    }
+
+    fn at(&self, pos: BoardPos) -> &Node {
+        match self {
+            Self::Direct(matrix) => matrix.at(pos),
+            Self::Ref(graph) => graph.node(pos),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MoveGraph<'a> {
+    width: Idx,
+    height: Idx,
+    nodes: MoveGraphData<'a>,
+}
+
+impl<'a> Display for MoveGraph<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for y in 0..self.height {
             for x in 0..self.width {
@@ -69,7 +103,7 @@ pub enum Direction {
     Vertical,
 }
 
-impl MoveGraph {
+impl<'a> MoveGraph<'a> {
     pub fn new(width: Idx, height: Idx) -> Self {
         let mut res = Self::new_empty(width, height);
 
@@ -91,6 +125,10 @@ impl MoveGraph {
         }
 
         res
+    }
+
+    pub fn ref_to(&'a self) -> Self {
+        Self { width: self.width, height: self.height, nodes: MoveGraphData::Ref(self) }
     }
 
     pub fn width(&self) -> Idx {
@@ -163,7 +201,7 @@ impl MoveGraph {
 
     fn new_empty(width: Idx, height: Idx) -> Self {
         let mk_node = || Node { pos: BoardPos::new(0, 0), edges: Vec::new(), next: None, prev: None };
-        Self { width, height, nodes: Matrix2D::new(width, height, mk_node) }
+        Self { width, height, nodes: MoveGraphData::Direct(Matrix2D::new(width, height, mk_node)) }
     }
 
     fn ensure_dimension(&self, other: &Self, dim: impl Fn(&Self) -> Idx, name: &str) {

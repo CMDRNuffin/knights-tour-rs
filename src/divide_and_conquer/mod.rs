@@ -22,7 +22,7 @@ pub fn solve(args: Args) -> Option<(Duration, Board)> {
     // step 2.5 (optional, if I have time): generate each chunk in parallel
     // step 3: stitch the tours together
     // step 4 (optional, if I have time): apply the obfuscation algorithm
-    let size = args.field;
+    let size = args.board_size?;
     let solve = if size.width() % 2 == 0 || size.height() % 2 == 0 /* can be a closed tour */ {
         |size|divide_and_conquer_impl(size, SolveQuadrantMode::Closed)
     } else {
@@ -49,7 +49,7 @@ enum SolveQuadrantMode {
     Stretched(Direction),
 }
 
-fn divide_and_conquer_open(size: BoardSize) -> Option<MoveGraph> {
+fn divide_and_conquer_open<'a>(size: BoardSize) -> Option<MoveGraph<'a>> {
     // split the graph into parts
     // solve each part (topmost leftmost as structured closed tour skipping (0,0))
     // merge the parts together
@@ -68,7 +68,7 @@ fn divide_and_conquer_open(size: BoardSize) -> Option<MoveGraph> {
     Some(graph)
 }
 
-fn divide_and_conquer_impl(size: BoardSize, mode: SolveQuadrantMode) -> Option<MoveGraph> {
+fn divide_and_conquer_impl<'a>(size: BoardSize, mode: SolveQuadrantMode) -> Option<MoveGraph<'a>> {
     // Case 1: n <= 10 && m <= 10
     if size.width() <= 10 && size.height() <= 10 {
         let min_dimension = size.width().min(size.height());
@@ -165,7 +165,7 @@ fn split_length(length: Idx) -> (Idx, Idx) {
     (half, length - half)
 }
 
-fn merge(first: MoveGraph, second: MoveGraph, direction: Direction) -> MoveGraph {
+fn merge<'a>(first: MoveGraph<'a>, second: MoveGraph<'a>, direction: Direction) -> MoveGraph<'a> {
     // for the start and end of the second graph, find the possible moves ending on the first graph
     // among those moves, find any one where both target nodes are directly connected by a single move (this can be hardcoded for each direction)
     // connect the target nodes to the corresponding nodes in the second graph
