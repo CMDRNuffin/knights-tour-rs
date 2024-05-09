@@ -111,7 +111,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
     *graph.node_mut(start_pos).prev_mut() = Some(start_pos); // mark start as visited and start
     let mut knight = Knight::new(start_pos);
 
-    let predetermined_moves = preconnect_corners(&graph, mode);
+    let predetermined_moves = preconnect_corners(&graph, mode, size);
 
     let expected_move_count = (graph.width() * graph.height() - dead_squares.len() as Idx) as usize
         - if end_point.is_some() && end_point == Some(start_pos) { 0 } else { 1 };
@@ -211,15 +211,16 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
     Some((graph, duration, dead_squares))
 }
 
-fn preconnect_corners(graph: &MoveGraph, mode: Mode) -> HashMap<BoardPos, Vec<BoardPos>> {
+fn preconnect_corners(graph: &MoveGraph, mode: Mode, size: BoardSize) -> HashMap<BoardPos, Vec<BoardPos>> {
     let top_left = match mode {
         Mode::Basic(_) => return HashMap::new(),
         Mode::Structured(StructureMode::Closed(skip_corner)) => {
-            (true, !skip_corner)
+            (true, !skip_corner, None)
         },
-        _ => {
-            (false, false)
+        Mode::Structured(StructureMode::Stretched(direction)) => {
+            (false, false, Some(direction))
         },
+        _ => (false, false, None)
     };
 
     // multipliers for the offsets
@@ -263,9 +264,43 @@ fn preconnect_corners(graph: &MoveGraph, mode: Mode) -> HashMap<BoardPos, Vec<Bo
         add(pos, prev);
     }
 
+    if let Some(direction) = top_left.2 {
+        preconnect_end_point(&mut res, direction, size);
+    }
+
     dprintln!("Preconnected moves: {res:?}");
 
     res
+}
+
+fn preconnect_end_point(preconnected_corners: &mut HashMap<BoardPos, Vec<BoardPos>>, direction: Direction, size: BoardSize) {
+    let half_size = size.width().max(size.height()) / 2;
+    let half_size = half_size.min(size.width()).min(size.height());
+
+    if half_size < 5 {
+        // small board, no need to preconnect the end point
+        return;
+    }
+
+    let (start, offset) = match direction {
+        Direction::Horizontal => (BoardPos::new(0, 1), (2, 1)),
+        Direction::Vertical => (BoardPos::new(1, 0), (1, 2)),
+    };
+
+    let mut prev = start;
+    loop {
+        if let Some(next) = prev.try_translate(offset.0, offset.1) {
+            preconnected_corners.entry(prev).or_insert_with(Vec::new).push(next);
+            preconnected_corners.entry(next).or_insert_with(Vec::new).push(prev);
+            prev = next;
+            if prev.col() >= half_size && prev.row() >= half_size {
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
 }
 
 struct ReachabilityChecker<'a>{

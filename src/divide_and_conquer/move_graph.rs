@@ -6,16 +6,49 @@ use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board::
 enum MoveGraphData<'a> {
     Direct(Matrix2D<Node>),
     Ref(&'a MoveGraph<'a>),
+    ReverseRef(&'a MoveGraph<'a>),
 }
 
 impl<'a> IntoIterator for &'a MoveGraphData<'a> {
-    type Item = &'a Node;
-    type IntoIter = Matrix2DIterator<'a, Node>;
+    type Item = NodeRef<'a>;
+    type IntoIter = NodesIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            MoveGraphData::Direct(matrix) => matrix.into_iter(),
+            MoveGraphData::Direct(matrix) => matrix.into_iter().into(),
             MoveGraphData::Ref(graph) => graph.nodes.into_iter(),
+            MoveGraphData::ReverseRef(graph) => graph.nodes.into_iter().reverse(),
+        }
+    }
+}
+
+pub struct NodesIterator<'a> {
+    iter: Matrix2DIterator<'a, Node>,
+    is_reversed: bool,
+}
+
+impl<'a> NodesIterator<'a> {
+    pub fn reverse(self) -> Self {
+        Self { iter: self.iter, is_reversed: !self.is_reversed }
+    }
+}
+
+impl<'a> From<Matrix2DIterator<'a, Node>> for NodesIterator<'a> {
+    fn from(iter: Matrix2DIterator<'a, Node>) -> Self {
+        Self { iter, is_reversed: false }
+    }
+}
+
+impl<'a> Iterator for NodesIterator<'a> {
+    type Item = NodeRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.iter.next()?;
+        if self.is_reversed {
+            Some(NodeRef::Reverse(result))
+        }
+        else {
+            Some(NodeRef::Direct(result))
         }
     }
 }
@@ -24,14 +57,15 @@ impl<'a> MoveGraphData<'a> {
     fn at_mut(&mut self, pos: BoardPos) -> &mut Node {
         match self {
             Self::Direct(matrix) => matrix.at_mut(pos),
-            Self::Ref(_) => panic!("Cannot mutate a reference to a MoveGraph"),
+            _ => panic!("Cannot mutate a reference to a MoveGraph"),
         }
     }
 
-    fn at(&self, pos: BoardPos) -> &Node {
+    fn at(&self, pos: BoardPos) -> NodeRef {
         match self {
-            Self::Direct(matrix) => matrix.at(pos),
+            Self::Direct(matrix) => NodeRef::Direct(matrix.at(pos)),
             Self::Ref(graph) => graph.node(pos),
+            Self::ReverseRef(graph) => graph.node(pos).reverse(),
         }
     }
 }
@@ -79,6 +113,48 @@ pub struct Node {
     prev: Option<BoardPos>,
 }
 
+pub enum NodeRef<'a> {
+    Direct(&'a Node),
+    Reverse(&'a Node),
+}
+
+impl<'a> NodeRef<'a> {
+    pub fn pos(&self) -> BoardPos {
+        match self {
+            Self::Direct(node) => node.pos,
+            Self::Reverse(node) => node.pos,
+        }
+    }
+
+    pub fn next(&self) -> Option<BoardPos> {
+        match self {
+            Self::Direct(node) => node.next,
+            Self::Reverse(node) => node.prev,
+        }
+    }
+
+    pub fn prev(&self) -> Option<BoardPos> {
+        match self {
+            Self::Direct(node) => node.prev,
+            Self::Reverse(node) => node.next,
+        }
+    }
+
+    pub fn reverse(self) -> Self {
+        match self {
+            Self::Direct(node) => Self::Reverse(node),
+            Self::Reverse(node) => Self::Direct(node),
+        }
+    }
+    
+    fn edges(&self) -> &[BoardPos]{
+        match *self {
+            Self::Direct(node) => &node.edges,
+            Self::Reverse(node) => &node.edges,
+        }
+    }
+}
+
 impl Node {
     pub fn next(&self) -> Option<BoardPos> {
         self.next
@@ -88,12 +164,25 @@ impl Node {
         self.prev
     }
 
+    pub fn pos(&self) -> BoardPos {
+        self.pos
+    }
+
     pub fn next_mut(&mut self) -> &mut Option<BoardPos> {
         &mut self.next
     }
 
     pub fn prev_mut(&mut self) -> &mut Option<BoardPos> {
         &mut self.prev
+    }
+
+    pub fn reverse(&self) -> Self {
+        Self {
+            pos: self.pos,
+            edges: self.edges.clone(),
+            next: self.prev,
+            prev: self.next,
+        }
     }
 }
 
@@ -139,7 +228,7 @@ impl<'a> MoveGraph<'a> {
         self.height
     }
 
-    pub fn node(&self, pos: BoardPos) -> &Node {
+    pub fn node(&self, pos: BoardPos) -> NodeRef {
         self.nodes.at(pos)
     }
 
@@ -150,7 +239,7 @@ impl<'a> MoveGraph<'a> {
     pub fn to_board(self) -> Board {
         let mut board = Board::new(self.width, self.height, 0);
         let pos = BoardPos::new(0, 0);
-        let mut node = self.nodes.at(pos);
+        let mut node = self.node(pos);
 
         macro_rules! print_move {
             ($index:expr => $prev:expr, $pos:expr, $next:expr) => {
@@ -161,36 +250,36 @@ impl<'a> MoveGraph<'a> {
         }
 
         // find first node in the chain (or self.nodes[0].next in case of a cycle)
-        while let Some(prev_pos) = node.prev {
+        while let Some(prev_pos) = node.prev() {
             if prev_pos == pos {
                 dprintln!("Cycle detected at {pos}!");
                 break;
             }
 
             dprintln!("Going back one {} -> {}!", pos, prev_pos);
-            node = self.nodes.at(prev_pos);
+            node = self.node(prev_pos);
         }
 
-        let pos = if let Some(prev_node) = node.prev {
+        let pos = if let Some(prev_node) = node.prev() {
             node = self.node(prev_node);
             pos
         }
         else {
-            node.pos
+            node.pos()
         };
 
-        print_move!(1 => node.prev, node.pos, node.next);
+        print_move!(1 => node.prev(), node.pos(), node.next());
         *board.at_mut(pos) = 1;
 
         let mut i = 2;
-        while let Some(pos) = node.next {
+        while let Some(pos) = node.next() {
             if *board.at_mut(pos) != 0 {
                 break;
             }
 
             *board.at_mut(pos) = i;
-            node = self.nodes.at(pos);
-            print_move!(i => node.prev, node.pos, node.next);
+            node = self.node(pos);
+            print_move!(i => node.prev(), node.pos(), node.next());
             i += 1;
         }
 
@@ -206,7 +295,7 @@ impl<'a> MoveGraph<'a> {
 
     fn ensure_dimension(&self, other: &Self, dim: impl Fn(&Self) -> Idx, name: &str) {
         if dim(self) != dim(other) {
-            panic!("Cannot merge graphs with different {name}");
+            panic!("Cannot merge graphs with different {name}: self = {}, other = {}", dim(self), dim(other));
         }
     }
 
@@ -225,12 +314,12 @@ impl<'a> MoveGraph<'a> {
         let mut res = Self::new_empty(width, height);
         for node in &self.nodes {
             let map = |pos: &BoardPos| BoardPos::new(pos.col(), pos.row());
-            let pos = BoardPos::new(node.pos.col(), node.pos.row());
+            let pos = node.pos();
             let new_node = Node {
                 pos,
-                edges: node.edges.iter().map(map).collect(),
-                next: node.next.as_ref().map(map),
-                prev: node.prev.as_ref().map(map),
+                edges: node.edges().iter().map(map).collect(),
+                next: node.next().as_ref().map(map),
+                prev: node.prev().as_ref().map(map),
             };
 
             *res.nodes.at_mut(pos) = new_node;
@@ -238,17 +327,29 @@ impl<'a> MoveGraph<'a> {
 
         for node in &other.nodes {
             let map = |pos: &BoardPos| BoardPos::new(pos.col() + x_offset, pos.row() + y_offset);
-            let pos = BoardPos::new(node.pos.col() + self.width, node.pos.row() + self.height);
+            let pos = map(&node.pos());
             let new_node = Node {
                 pos,
-                edges: node.edges.iter().map(map).collect(),
-                next: node.next.as_ref().map(map),
-                prev: node.prev.as_ref().map(map),
+                edges: node.edges().iter().map(map).collect(),
+                next: node.next().as_ref().map(map),
+                prev: node.prev().as_ref().map(map),
             };
 
             *res.nodes.at_mut(pos) = new_node;
         }
 
         res
+    }
+    
+    pub fn reverse(self) -> Self {
+        Self {
+            width: self.width,
+            height: self.height,
+            nodes: match self.nodes {
+                MoveGraphData::Direct(matrix) => MoveGraphData::Direct(matrix.map(|node| node.reverse())),
+                MoveGraphData::Ref(data) => MoveGraphData::ReverseRef(data),
+                MoveGraphData::ReverseRef(data) => MoveGraphData::Ref(data),
+            }
+        }
     }
 }

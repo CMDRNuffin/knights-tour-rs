@@ -1,6 +1,6 @@
 use std::{mem::replace, time::{Duration, Instant}};
 
-use crate::{aliases::BoardIndex as Idx, args::{board_size::BoardSize, Args}, board::Board, board_pos::BoardPos, divide_and_conquer::move_graph::Node, warnsdorff::{self, Mode, StructureMode}};
+use crate::{aliases::BoardIndex as Idx, args::{board_size::BoardSize, Args}, board::Board, board_pos::BoardPos, divide_and_conquer::move_graph::Node, dprintln, warnsdorff::{self, Mode, StructureMode}};
 
 use self::move_graph::{MoveGraph, Direction};
 
@@ -69,16 +69,17 @@ fn divide_and_conquer_open<'a>(size: BoardSize) -> Option<MoveGraph<'a>> {
 }
 
 fn divide_and_conquer_impl<'a>(size: BoardSize, mode: SolveQuadrantMode) -> Option<MoveGraph<'a>> {
+    let min_dimension = size.width().min(size.height());
+    let max_dimension = size.width().max(size.height());
+
     // Case 1: n <= 10 && m <= 10
     if size.width() <= 10 && size.height() <= 10 {
-        let min_dimension = size.width().min(size.height());
-        let max_dimension = size.width().max(size.height());
         let structure_mode = match mode {
             SolveQuadrantMode::Closed => {
                 if min_dimension == 4 && max_dimension == 5 {
                     return Some(warnsdorff::solve_internal(size.into(), Mode::Freeform)?.0);
                 } else {
-                    let skip_top_left = min_dimension % 2 != 0 && max_dimension % 2 != 0;
+                    let skip_top_left = (min_dimension % 2 != 0) & (max_dimension % 2 != 0);
                     StructureMode::Closed(skip_top_left)
                 }
             },
@@ -90,9 +91,6 @@ fn divide_and_conquer_impl<'a>(size: BoardSize, mode: SolveQuadrantMode) -> Opti
 
     let make_closed = |size: BoardSize| -> Option<MoveGraph> { divide_and_conquer_impl(size, SolveQuadrantMode::Closed) };
     let make_stretched = |size: BoardSize, direction: Direction| -> Option<MoveGraph> { divide_and_conquer_impl(size, SolveQuadrantMode::Stretched(direction)) };
-
-    let min_dimension = size.width().min(size.height());
-    let max_dimension = size.width().max(size.height());
 
     let direction;
     let set_max_dimension: fn(BoardSize, Idx) -> BoardSize;
@@ -126,6 +124,7 @@ fn divide_and_conquer_impl<'a>(size: BoardSize, mode: SolveQuadrantMode) -> Opti
     if (4..=10).contains(&min_dimension) {
         let new_size = set_max_dimension(size, m.0);
         let remainder = set_max_dimension(size, m.1);
+        dprintln!("double {direction:?}");
         return Some(
             merge(
                 make_closed(new_size)?,
@@ -143,18 +142,32 @@ fn divide_and_conquer_impl<'a>(size: BoardSize, mode: SolveQuadrantMode) -> Opti
         new_size(n.1, m.1),
     );
 
+    let other_direction = match direction {
+        Direction::Horizontal => Direction::Vertical,
+        Direction::Vertical => Direction::Horizontal,
+    };
+
+    let make_first = |size: BoardSize| {
+        match mode {
+            SolveQuadrantMode::Closed => make_closed(size),
+            SolveQuadrantMode::Stretched(direction) => make_stretched(size, direction),
+        }
+    };
+
+    dprintln!("quad: {sizes:?} {direction:?}");
     let res = merge(
         merge(
-            make_closed(sizes.0)?,
-            make_stretched(sizes.1, Direction::Horizontal)?,
-            Direction::Horizontal
+            make_first(sizes.0)?,
+            make_stretched(sizes.1, other_direction)?,
+            other_direction
         ), 
         merge(
-            make_stretched(sizes.2, Direction::Vertical)?,
-            make_stretched(sizes.3, Direction::Horizontal)?,
-            Direction::Horizontal
+            make_stretched(sizes.2, direction)?,
+            make_stretched(sizes.3, other_direction)?,
+            other_direction
         ),
-        Direction::Vertical);
+        direction);
+
     Some(res)
 }
 
@@ -175,22 +188,31 @@ fn merge<'a>(first: MoveGraph<'a>, second: MoveGraph<'a>, direction: Direction) 
         Direction::Vertical => (BoardPos::new(0, first.height()), BoardPos::new(1, first.height())),
     };
 
-    let (first_start, first_end) = match direction {
+    let (first_end, first_start) = match direction {
         Direction::Horizontal => (BoardPos::new(first.width() - 2, 0), BoardPos::new(first.width() - 1, 2)),
         Direction::Vertical => (BoardPos::new(0, first.height() - 2), BoardPos::new(2, first.height() - 1)),
     };
 
-    let mut merged = first.combine(second, direction);
+    let second = if first.node(first_end).next() == Some(first_start) {
+        second.reverse()
+    }
+    else {
+        second
+    };
     
+    let mut merged = first.combine(second, direction);
+    let dbg = merged.clone();
+
     let update_node = |node: &mut Node, old_target, new_target|{
-        if node.prev() == old_target {
+        if (node.prev() == old_target) | (old_target.is_none() & (node.prev() == Some(node.pos()))) {
             *node.prev_mut() = Some(new_target);
         }
-        else if node.next() == old_target {
+        else if (node.next() == old_target) | (old_target.is_none() & (node.next() == Some(node.pos()))) {
             *node.next_mut() = Some(new_target);
         }
         else {
-            panic!("Invalid node");
+            eprintln!("{dbg}");
+            panic!("Invalid node: {:?} [ {:?} -> {:?} ] - {:?} - {:?} [{:?}]", node.pos(), node.prev(), node.next(), old_target, new_target, direction);
         }
     };
 
@@ -198,6 +220,9 @@ fn merge<'a>(first: MoveGraph<'a>, second: MoveGraph<'a>, direction: Direction) 
     update_node(merged.node_mut(first_end), Some(first_start), second_end);
     update_node(merged.node_mut(second_start), None, first_start);
     update_node(merged.node_mut(second_end), None, first_end);
+
+    dprintln!("Merged:");
+    dprintln!("{merged}");
 
     merged
 }

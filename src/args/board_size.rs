@@ -8,6 +8,16 @@ pub struct BoardSize {
     height: Idx,
 }
 
+impl std::fmt::Debug for BoardSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let w = self.width;
+        let h = self.height;
+
+        write!(f, "{w}x{h}")
+    }
+
+}
+
 impl BoardSize {
     pub fn width(&self) -> Idx {
         self.width

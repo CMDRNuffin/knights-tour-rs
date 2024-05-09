@@ -11,10 +11,18 @@ where T: Clone {
 }
 
 impl<T> Matrix2D<T>
-where T: Clone {
+where T: Clone
+{
     pub fn new(w: Idx, h: Idx, f: impl Fn() -> T) -> Self {
         let data = make_slice(w, &|| make_slice(h, &f));
         Matrix2D { data, w, h, }
+    }
+
+    pub fn map<R>(self, mut f: impl FnMut(&T) -> R) -> Matrix2D<R>
+    where R: Clone
+    {
+        let data = self.data.into_iter().map(|col| col.into_iter().map(|node| f(node)).collect()).collect();
+        Matrix2D { data, w: self.w, h: self.h }
     }
 
     pub fn at(&self, pos: BoardPos) -> &T {
