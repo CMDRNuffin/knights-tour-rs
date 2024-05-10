@@ -6,6 +6,7 @@ mod knight;
 mod warnsdorff;
 mod divide_and_conquer;
 mod debug_output;
+mod move_graph;
 
 use args::Args;
 use clap::Parser;

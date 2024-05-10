@@ -6,14 +6,10 @@ use crate::{
     args::Args,
     board::Board,
     board_pos::BoardPos,
-    divide_and_conquer::move_graph::Node,
+    move_graph::{MoveGraph, Node, Direction},
     dprintln,
     warnsdorff::{self, Mode, StructureMode}
 };
-
-use self::move_graph::{MoveGraph, Direction};
-
-pub mod move_graph;
 
 pub fn solve(args: Args) -> Option<(Duration, Board)> {
     // algorithm shamelessly stolen from https://www.sciencedirect.com/science/article/pii/S0166218X04003488

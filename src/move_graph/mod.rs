@@ -2,78 +2,19 @@ use std::fmt::Debug;
 
 use crate::{
     aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath},
-    board::{matrix2d::{Matrix2D, Matrix2DIterator}, Board},
+    board::{matrix2d::Matrix2D, Board},
     board_pos::BoardPos,
     dprintln
 };
 
-#[derive(Clone, Debug)]
-enum MoveGraphData<'a> {
-    Direct(Matrix2D<Node>),
-    Ref(&'a MoveGraph<'a>),
-    ReverseRef(&'a MoveGraph<'a>),
-}
-
-impl<'a> IntoIterator for &'a MoveGraphData<'a> {
-    type Item = NodeRef<'a>;
-    type IntoIter = NodesIterator<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        match self {
-            MoveGraphData::Direct(matrix) => matrix.into_iter().into(),
-            MoveGraphData::Ref(graph) => graph.nodes.into_iter(),
-            MoveGraphData::ReverseRef(graph) => graph.nodes.into_iter().reverse(),
-        }
-    }
-}
-
-pub struct NodesIterator<'a> {
-    iter: Matrix2DIterator<'a, Node>,
-    is_reversed: bool,
-}
-
-impl<'a> NodesIterator<'a> {
-    pub fn reverse(self) -> Self {
-        Self { iter: self.iter, is_reversed: !self.is_reversed }
-    }
-}
-
-impl<'a> From<Matrix2DIterator<'a, Node>> for NodesIterator<'a> {
-    fn from(iter: Matrix2DIterator<'a, Node>) -> Self {
-        Self { iter, is_reversed: false }
-    }
-}
-
-impl<'a> Iterator for NodesIterator<'a> {
-    type Item = NodeRef<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let result = self.iter.next()?;
-        if self.is_reversed {
-            Some(NodeRef::Reverse(result))
-        }
-        else {
-            Some(NodeRef::Direct(result))
-        }
-    }
-}
-
-impl<'a> MoveGraphData<'a> {
-    fn at_mut(&mut self, pos: BoardPos) -> &mut Node {
-        match self {
-            Self::Direct(matrix) => matrix.at_mut(pos),
-            _ => panic!("Cannot mutate a reference to a MoveGraph"),
-        }
-    }
-
-    fn at(&self, pos: BoardPos) -> NodeRef {
-        match self {
-            Self::Direct(matrix) => NodeRef::Direct(matrix.at(pos)),
-            Self::Ref(graph) => graph.node(pos),
-            Self::ReverseRef(graph) => graph.node(pos).reverse(),
-        }
-    }
-}
+mod node;
+mod node_ref;
+mod move_graph_data;
+mod nodes_iterator;
+pub use node::Node;
+pub use node_ref::NodeRef;
+use move_graph_data::MoveGraphData;
+pub use nodes_iterator::NodesIterator;
 
 #[derive(Clone)]
 pub struct MoveGraph<'a> {
@@ -110,87 +51,6 @@ impl<'a> Debug for MoveGraph<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Node {
-    pos: BoardPos,
-    edges: Vec<BoardPos>,
-    next: Option<BoardPos>,
-    prev: Option<BoardPos>,
-}
-
-pub enum NodeRef<'a> {
-    Direct(&'a Node),
-    Reverse(&'a Node),
-}
-
-impl<'a> NodeRef<'a> {
-    pub fn pos(&self) -> BoardPos {
-        match self {
-            Self::Direct(node) => node.pos,
-            Self::Reverse(node) => node.pos,
-        }
-    }
-
-    pub fn next(&self) -> Option<BoardPos> {
-        match self {
-            Self::Direct(node) => node.next,
-            Self::Reverse(node) => node.prev,
-        }
-    }
-
-    pub fn prev(&self) -> Option<BoardPos> {
-        match self {
-            Self::Direct(node) => node.prev,
-            Self::Reverse(node) => node.next,
-        }
-    }
-
-    pub fn reverse(self) -> Self {
-        match self {
-            Self::Direct(node) => Self::Reverse(node),
-            Self::Reverse(node) => Self::Direct(node),
-        }
-    }
-    
-    fn edges(&self) -> &[BoardPos]{
-        match *self {
-            Self::Direct(node) => &node.edges,
-            Self::Reverse(node) => &node.edges,
-        }
-    }
-}
-
-impl Node {
-    pub fn next(&self) -> Option<BoardPos> {
-        self.next
-    }
-
-    pub fn prev(&self) -> Option<BoardPos> {
-        self.prev
-    }
-
-    pub fn pos(&self) -> BoardPos {
-        self.pos
-    }
-
-    pub fn next_mut(&mut self) -> &mut Option<BoardPos> {
-        &mut self.next
-    }
-
-    pub fn prev_mut(&mut self) -> &mut Option<BoardPos> {
-        &mut self.prev
-    }
-
-    pub fn reverse(&self) -> Self {
-        Self {
-            pos: self.pos,
-            edges: self.edges.clone(),
-            next: self.prev,
-            prev: self.next,
-        }
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Direction {
     Horizontal,
@@ -214,7 +74,7 @@ impl<'a> MoveGraph<'a> {
                     }
                 }
 
-                *res.nodes.at_mut(BoardPos::new(x, y)) = Node { pos: BoardPos::new(x, y), edges, next: None, prev: None };
+                *res.nodes.at_mut(BoardPos::new(x, y)) = Node::new(BoardPos::new(x, y), edges);
             }
         }
 
@@ -294,7 +154,7 @@ impl<'a> MoveGraph<'a> {
     }
 
     fn new_empty(width: Idx, height: Idx) -> Self {
-        let mk_node = || Node { pos: BoardPos::new(0, 0), edges: Vec::new(), next: None, prev: None };
+        let mk_node = || Node::new(BoardPos::new(0, 0), Vec::new());
         Self { width, height, nodes: MoveGraphData::Direct(Matrix2D::new(width, height, mk_node)) }
     }
 
@@ -305,40 +165,28 @@ impl<'a> MoveGraph<'a> {
     }
 
     pub fn combine(self, other: Self, direction: Direction) -> Self {
-        let ((width, height), (x_offset, y_offset)) = match direction {
+        let ((width, height), offset) = match direction {
             Direction::Horizontal => {
                 self.ensure_dimension(&other, Self::height, "height");
-                ((self.width + other.width, self.height), (self.width, 0))
+                ((self.width + other.width, self.height), BoardPos::new(self.width, 0))
             },
             Direction::Vertical => {
                 self.ensure_dimension(&other, Self::width, "width");
-                ((self.width, self.height + other.height), (0, self.height))
+                ((self.width, self.height + other.height), BoardPos::new(0, self.height))
             },
         };
 
         let mut res = Self::new_empty(width, height);
         for node in &self.nodes {
-            let map = |pos: &BoardPos| BoardPos::new(pos.col(), pos.row());
             let pos = node.pos();
-            let new_node = Node {
-                pos,
-                edges: node.edges().iter().map(map).collect(),
-                next: node.next().as_ref().map(map),
-                prev: node.prev().as_ref().map(map),
-            };
+            let new_node = node.clone_with_offset(BoardPos::ZERO);
 
             *res.nodes.at_mut(pos) = new_node;
         }
 
         for node in &other.nodes {
-            let map = |pos: &BoardPos| BoardPos::new(pos.col() + x_offset, pos.row() + y_offset);
-            let pos = map(&node.pos());
-            let new_node = Node {
-                pos,
-                edges: node.edges().iter().map(map).collect(),
-                next: node.next().as_ref().map(map),
-                prev: node.prev().as_ref().map(map),
-            };
+            let new_node = node.clone_with_offset(offset);
+            let pos = new_node.pos();
 
             *res.nodes.at_mut(pos) = new_node;
         }

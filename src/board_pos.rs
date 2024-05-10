@@ -16,6 +16,14 @@ impl From<BoardPos> for (usize, usize) {
     }
 }
 
+impl Add<BoardPos> for BoardPos {
+    type Output = BoardPos;
+
+    fn add(self, rhs: BoardPos) -> Self::Output {
+        Self(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+
 impl TryFrom<(usize, usize)> for BoardPos {
     type Error = String;
 
@@ -35,6 +43,8 @@ impl From<BoardPos> for (Idx, Idx) {
 }
 
 impl BoardPos {
+    pub const ZERO: Self = Self(0, 0);
+
     pub fn new(col: Idx, row: Idx) -> Self {
         Self(col, row)
     }

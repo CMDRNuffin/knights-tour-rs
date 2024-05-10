@@ -6,7 +6,7 @@ use crate::{
     args::Args,
     board::Board,
     board_pos::BoardPos,
-    divide_and_conquer::move_graph::{Direction, MoveGraph},
+    move_graph::{Direction, MoveGraph},
     dprint,
     dprintln,
     knight::Knight,
