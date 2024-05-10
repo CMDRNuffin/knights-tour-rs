@@ -1,6 +1,10 @@
 use std::fmt::Display;
 
-use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, args::board_size::BoardSize, board_pos::BoardPos};
+use crate::{
+    aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath},
+    board_size::BoardSize,
+    board_pos::BoardPos
+};
 
 #[derive(Debug, Clone)]
 pub struct Matrix2D<T>

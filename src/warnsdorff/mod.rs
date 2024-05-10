@@ -1,7 +1,15 @@
 use std::{collections::{HashMap, HashSet}, hash::Hash, path::PathBuf, sync::OnceLock, time::{Duration, Instant}};
 
 use crate::{
-    aliases::BoardIndex as Idx, args::{board_size::BoardSize, Args}, board::Board, board_pos::BoardPos, divide_and_conquer::move_graph::{Direction, MoveGraph}, dprint, dprintln, knight::Knight
+    aliases::BoardIndex as Idx,
+    board_size::BoardSize,
+    args::Args,
+    board::Board,
+    board_pos::BoardPos,
+    divide_and_conquer::move_graph::{Direction, MoveGraph},
+    dprint,
+    dprintln,
+    knight::Knight,
 };
 
 mod move_tracker;
@@ -161,7 +169,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
             move_tracker.push(next_move);
             dprintln!("Move #{count}:");
             dprintln!("{move_tracker}");
-            dprintln!("{graph}");
+            dprintln!("{graph:?}");
             dprintln!();
         } else if moves.len() > 1 {
             // undo the last move
@@ -179,7 +187,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
             }
             else {
                 dprintln!("Move #{count}: return from {}", knight.position());
-                dprintln!("{graph}");
+                dprintln!("{graph:?}");
                 dprintln!();
 
                 panic!("No previous move found for {}!", knight.position());
@@ -187,7 +195,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
 
             dprintln!("Move #{count}: return to {}", knight.position());
             dprintln!("{move_tracker}");
-            dprintln!("{graph}");
+            dprintln!("{graph:?}");
             dprintln!();
         }
         else {
@@ -205,7 +213,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
         }
     }
 
-    dprintln!("{graph}");
+    dprintln!("{graph:?}");
 
     let duration = now.elapsed();
     Some((graph, duration, dead_squares))

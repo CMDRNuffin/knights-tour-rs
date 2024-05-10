@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, args::board_size::BoardSize, board_pos::BoardPos};
+use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board_size::BoardSize, board_pos::BoardPos};
 
 pub use super::corner::Corner;
 

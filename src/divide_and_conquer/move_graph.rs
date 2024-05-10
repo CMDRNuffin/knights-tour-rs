@@ -1,6 +1,11 @@
-use std::fmt::Display;
+use std::fmt::Debug;
 
-use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board::{matrix2d::{Matrix2D, Matrix2DIterator}, Board}, board_pos::BoardPos, dprintln};
+use crate::{
+    aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath},
+    board::{matrix2d::{Matrix2D, Matrix2DIterator}, Board},
+    board_pos::BoardPos,
+    dprintln
+};
 
 #[derive(Clone, Debug)]
 enum MoveGraphData<'a> {
@@ -70,14 +75,14 @@ impl<'a> MoveGraphData<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MoveGraph<'a> {
     width: Idx,
     height: Idx,
     nodes: MoveGraphData<'a>,
 }
 
-impl<'a> Display for MoveGraph<'a> {
+impl<'a> Debug for MoveGraph<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for y in 0..self.height {
             for x in 0..self.width {

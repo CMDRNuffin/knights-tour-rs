@@ -4,8 +4,7 @@ use clap::{*, builder::*};
 
 use crate::{board::corner_radius::CornerRadius, board_pos::{BoardPos, parse_board_pos}};
 
-pub mod board_size;
-use board_size::{parse_board_size, BoardSize};
+use crate::board_size::{parse_board_size, BoardSize};
 
 /// Calculates a knight's tour on a board of the given size with the provided dimensions and starting position.
 #[derive(Parser, Clone)]

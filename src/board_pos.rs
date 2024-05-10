@@ -1,5 +1,5 @@
 use std::{fmt::Display, ops::{Add, Sub}};
-use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, args::board_size::BoardSize};
+use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board_size::BoardSize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct BoardPos(Idx, Idx);

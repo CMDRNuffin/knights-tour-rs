@@ -1,5 +1,6 @@
 mod args;
 mod board_pos;
+mod board_size;
 mod board;
 mod knight;
 mod warnsdorff;

@@ -1,6 +1,15 @@
 use std::{mem::replace, time::{Duration, Instant}};
 
-use crate::{aliases::BoardIndex as Idx, args::{board_size::BoardSize, Args}, board::Board, board_pos::BoardPos, divide_and_conquer::move_graph::Node, dprintln, warnsdorff::{self, Mode, StructureMode}};
+use crate::{
+    aliases::BoardIndex as Idx,
+    board_size::BoardSize,
+    args::Args,
+    board::Board,
+    board_pos::BoardPos,
+    divide_and_conquer::move_graph::Node,
+    dprintln,
+    warnsdorff::{self, Mode, StructureMode}
+};
 
 use self::move_graph::{MoveGraph, Direction};
 
@@ -201,7 +210,6 @@ fn merge<'a>(first: MoveGraph<'a>, second: MoveGraph<'a>, direction: Direction) 
     };
     
     let mut merged = first.combine(second, direction);
-    let dbg = merged.clone();
 
     let update_node = |node: &mut Node, old_target, new_target|{
         if (node.prev() == old_target) | (old_target.is_none() & (node.prev() == Some(node.pos()))) {
@@ -211,7 +219,6 @@ fn merge<'a>(first: MoveGraph<'a>, second: MoveGraph<'a>, direction: Direction) 
             *node.next_mut() = Some(new_target);
         }
         else {
-            eprintln!("{dbg}");
             panic!("Invalid node: {:?} [ {:?} -> {:?} ] - {:?} - {:?} [{:?}]", node.pos(), node.prev(), node.next(), old_target, new_target, direction);
         }
     };
@@ -222,7 +229,7 @@ fn merge<'a>(first: MoveGraph<'a>, second: MoveGraph<'a>, direction: Direction) 
     update_node(merged.node_mut(second_end), None, first_end);
 
     dprintln!("Merged:");
-    dprintln!("{merged}");
+    dprintln!("{merged:?}");
 
     merged
 }
