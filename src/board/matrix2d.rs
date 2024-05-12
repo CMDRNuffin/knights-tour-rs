@@ -46,7 +46,11 @@ where T: Clone
     }
 
     pub fn iter(&self) -> Matrix2DIterator<T> {
-        Matrix2DIterator { matrix: self, col: 0, row: 0 }
+        Matrix2DIterator { matrix: self, col: 0, row: 0, start: BoardPos::new(0, 0), size: self.size() }
+    }
+
+    pub fn iter_section<'a>(&'a self, start: BoardPos, size: BoardSize) -> Matrix2DIterator<'a, T> {
+        Matrix2DIterator { matrix: self, col: start.col(), row: start.row(), start, size }
     }
 }
 
@@ -55,6 +59,20 @@ where T: Clone {
     matrix: &'a Matrix2D<T>,
     col: Idx,
     row: Idx,
+    start: BoardPos,
+    size: BoardSize,
+}
+
+impl<'a, T> Matrix2DIterator<'a, T>
+where T: Clone {
+    pub fn start(&self) -> BoardPos {
+        self.start
+    }
+
+    pub fn size(&self) -> BoardSize {
+        self.size
+    }
+
 }
 
 impl<'a, T> Iterator for Matrix2DIterator<'a, T>
@@ -62,17 +80,18 @@ where T: Clone {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.row == self.matrix.h {
+        if self.row == self.size.height() + self.start.row() {
             return None;
         }
 
         let pos = BoardPos::new(self.col, self.row);
         let val = self.matrix.at(pos);
         self.col += 1;
-        if self.col == self.matrix.w {
-            self.col = 0;
-            self.row += 1;
-        }
+
+        // this is technically branchless, because turning a bool into 1 or 0 is trivial with opimizations turned on
+        // and we do this because multiplication and addition is much faster than a branch prediction miss
+        self.col *= if self.col == self.size.width() + self.start.col() { 0 } else { 1 };
+        self.row += if self.col == 0 { 1 } else { 0 };
 
         Some(val)
     }

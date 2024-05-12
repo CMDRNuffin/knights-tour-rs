@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath};
+use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board_pos::BoardPos};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct BoardSize {
@@ -41,6 +41,28 @@ impl BoardSize {
     
     pub fn area(&self) -> IdxMath {
         self.width as IdxMath * self.height as IdxMath
+    }
+    
+    pub fn fits(&self, pos: BoardPos) -> bool {
+        pos.col() < self.width && pos.row() < self.height
+    }
+}
+
+impl PartialOrd for BoardSize {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let cmp_w = self.width.cmp(&other.width);
+        let cmp_h = self.height.cmp(&other.height);
+        if cmp_w == cmp_h {
+            Some(cmp_w)
+        }
+        else if cmp_w == std::cmp::Ordering::Equal {
+            Some(cmp_h)
+        }
+        else if cmp_h == std::cmp::Ordering::Equal {
+            Some(cmp_w)
+        } else {
+            None
+        }
     }
 }
 

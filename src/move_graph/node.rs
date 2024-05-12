@@ -43,6 +43,10 @@ impl Node {
         }
     }
 
+    pub fn reverse_in_place(&mut self) {
+        std::mem::swap(&mut self.next, &mut self.prev);
+    }
+
     pub fn new(pos: BoardPos, edges: Vec<BoardPos>) -> Self {
         Node {
             pos,

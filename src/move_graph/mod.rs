@@ -1,10 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath},
-    board::{matrix2d::Matrix2D, Board},
-    board_pos::BoardPos,
-    dprintln
+    aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board::{matrix2d::Matrix2D, Board}, board_pos::BoardPos, board_size::BoardSize, dprintln
 };
 
 mod node;
@@ -25,23 +22,25 @@ pub struct MoveGraph<'a> {
 
 impl<'a> Debug for MoveGraph<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let max_len = BoardPos::new(self.width -1, self.height -1).to_string().len();
+        let empty = " ".repeat(max_len);
         for y in 0..self.height {
             for x in 0..self.width {
                 write!(f, "| ")?;
                 let pos = BoardPos::new(x, y);
                 let node = self.node(pos);
                 if let Some(prev) = node.prev() {
-                    write!(f, "{}", prev)?;
+                    write!(f, "{: ^max_len$}", prev)?;
                 }
                 else {
-                    write!(f, "  ")?;
+                    write!(f, "{}", empty)?;
                 }
 
                 if let Some(next) = node.next() {
-                    write!(f, " -> {} ", next)?;
+                    write!(f, " -> {: ^max_len$} ", next)?;
                 }
                 else {
-                    write!(f, "       ")?;
+                    write!(f, "    {} ", empty)?;
                 }
             }
             writeln!(f, "|")?;
@@ -202,6 +201,34 @@ impl<'a> MoveGraph<'a> {
                 MoveGraphData::Direct(matrix) => MoveGraphData::Direct(matrix.map(|node| node.reverse())),
                 MoveGraphData::Ref(data) => MoveGraphData::ReverseRef(data),
                 MoveGraphData::ReverseRef(data) => MoveGraphData::Ref(data),
+                MoveGraphData::Section(data, start, size) => MoveGraphData::ReverseSection(data, start, size),
+                MoveGraphData::ReverseSection(data, start, size) => MoveGraphData::Section(data, start, size),
+            }
+        }
+    }
+    
+    fn section_node(&self, start: BoardPos, size: BoardSize, pos: BoardPos) -> NodeRef {
+        if !size.fits(pos) {
+            panic!("Position out of bounds: {} > {}", pos, size);
+        }
+        self.nodes.at(pos + start)
+    }
+    
+    pub fn insert_section(&mut self, graph: &MoveGraph, offset: BoardPos) {
+        for node in &graph.nodes {
+            let pos = node.pos() + offset;
+            let target_node = self.nodes.at_mut(pos);
+            *target_node.next_mut() = node.next().map(|pos| pos + offset);
+            *target_node.prev_mut() = node.prev().map(|pos| pos + offset);
+        }
+    }
+    
+    pub fn reverse_section(&mut self, pos: BoardPos, size: BoardSize) {
+        for col in pos.col()..(pos.col() + size.width()) {
+            for row in pos.row()..(pos.row() + size.height()) {
+                let pos = BoardPos::new(col, row);
+                let target_node = self.nodes.at_mut(pos);
+                target_node.reverse_in_place();
             }
         }
     }

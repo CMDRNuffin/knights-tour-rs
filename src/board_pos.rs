@@ -1,8 +1,9 @@
-use std::{fmt::Display, ops::{Add, Sub}};
+use std::{fmt::{Debug, Display}, ops::{Add, Sub}};
 use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board_size::BoardSize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct BoardPos(Idx, Idx);
+pub struct BPO(pub Option<BoardPos>);
 
 impl From<(Idx, Idx)> for BoardPos {
     fn from(value: (Idx, Idx)) -> Self {
@@ -21,6 +22,14 @@ impl Add<BoardPos> for BoardPos {
 
     fn add(self, rhs: BoardPos) -> Self::Output {
         Self(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+
+impl Sub<BoardPos> for BoardPos {
+    type Output = BoardPos;
+
+    fn sub(self, rhs: BoardPos) -> Self::Output {
+        Self(self.0 - rhs.0, self.1 - rhs.1)
     }
 }
 
@@ -64,6 +73,10 @@ impl BoardPos {
         (col_diff == 1 && row_diff == 2) || (col_diff == 2 && row_diff == 1)
     }
 
+    pub fn translate(&self, col: IdxMath, row: IdxMath) -> Self {
+        self.try_translate(col, row).expect(&format!("Invalid translation attempt: {self:?} -> {col}, {row}"))
+    }
+
     pub fn try_translate(&self, col: IdxMath, row: IdxMath) -> Option<Self> {
         self.try_translate_on_board(col, row, BoardSize::new(Idx::MAX, Idx::MAX))
     }
@@ -93,7 +106,22 @@ impl Display for BoardPos {
         let w = alphabetize(self.col() + 1);
         let h = self.row() + 1;
 
-        write!(f, "{w}{h}")
+        Display::fmt(&format!("{w}{h}"), f)
+    }
+}
+
+impl Display for BPO {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Some(pos) => Display::fmt(&pos, f),
+            None => write!(f, "None"),
+        }
+    }
+}
+
+impl Debug for BPO {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.0, f)
     }
 }
 
