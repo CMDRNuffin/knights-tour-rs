@@ -92,6 +92,10 @@ impl<'a> MoveGraph<'a> {
         self.height
     }
 
+    pub fn nodes(&'a self) -> NodesIterator<'a> {
+        self.nodes.into_iter()
+    }
+
     pub fn node(&self, pos: BoardPos) -> NodeRef {
         self.nodes.at(pos)
     }

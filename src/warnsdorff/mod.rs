@@ -4,7 +4,6 @@ use crate::{
     aliases::BoardIndex as Idx,
     board_size::BoardSize,
     args::Args,
-    board::Board,
     board_pos::BoardPos,
     move_graph::{Direction, MoveGraph},
     dprint,
@@ -15,9 +14,9 @@ use crate::{
 mod move_tracker;
 use move_tracker::MoveTracker;
 
-pub fn solve(args: Args) -> Option<(Duration, Board)> {
+pub fn solve<'a>(args: Args) -> Option<(Duration, MoveGraph<'a>)> {
     let result = solve_internal_impl(args.board_size?.into(), Mode::Basic(args))?;
-    Some((result.1, result.0.to_board().with_dead_squares(result.2)))
+    Some((result.1, result.0))
 }
 
 pub enum Mode {

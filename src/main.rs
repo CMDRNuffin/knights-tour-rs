@@ -7,6 +7,7 @@ mod warnsdorff;
 mod divide_and_conquer;
 mod debug_output;
 mod move_graph;
+mod svg;
 
 use args::Args;
 use clap::Parser;
@@ -38,18 +39,20 @@ fn main() {
         divide_and_conquer::solve
     };
 
-    let (elapsed, board) = if let Some(res) = solve(args.clone()) {
+    let quiet = args.quiet;
+    let (elapsed, board) = if let Some(res) = solve(args) {
         res
     } else {
         println!("No solution possible for this board configuration");
         return;
     };
 
-    if !args.quiet {
-        println!("{board}");
-    } else {
-        board.print_errors();
+    if !quiet {
+        let writer = std::io::stdout();
+        svg::render_svg(&mut writer.lock(), &board, elapsed).unwrap();
+        println!("<!-- Elapsed time: {}.{:03} seconds -->", elapsed.as_secs(), elapsed.subsec_millis());
     }
-    
-    println!("Elapsed time: {}.{:03} seconds", elapsed.as_secs(), elapsed.subsec_millis());
+    else {
+        println!("Elapsed time: {}.{:03} seconds", elapsed.as_secs(), elapsed.subsec_millis());
+    }
 }
