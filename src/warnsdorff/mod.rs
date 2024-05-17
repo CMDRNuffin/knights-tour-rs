@@ -4,7 +4,6 @@ use crate::{
     aliases::BoardIndex as Idx,
     board_size::BoardSize,
     args::Args,
-    board::Board,
     board_pos::BoardPos,
     move_graph::{Direction, MoveGraph},
     dprint,
