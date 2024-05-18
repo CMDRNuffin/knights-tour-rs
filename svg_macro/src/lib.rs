@@ -43,16 +43,12 @@ enum XmlDocStyle {
 impl Parse for XmlDoc {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         input.parse::<Token![<]>()?;
-        let is_ref = input.peek(Token![#]) && { input.parse::<Token![#]>()?; true };
 
-        let (name, style) = if input.peek(Ident) {
-            let ident: Ident = input.parse()?;
-            (ident.to_string(), if is_ref { XmlDocStyle::Ref } else { XmlDocStyle::Name })
-        } else if !is_ref && input.peek(LitStr) {
-            let lit: LitStr = input.parse()?;
-            (lit.value(), XmlDocStyle::Name)
+        let (name, is_ref) = parse_str(input, None)?;
+        let style = if is_ref {
+            XmlDocStyle::Ref
         } else {
-            return Err(input.error("Expected a #variable, an identifier or a string literal"));
+            XmlDocStyle::Name
         };
 
         let attributes = input.call(parse_attributes)?;
@@ -110,7 +106,7 @@ fn parse_attributes(input: syn::parse::ParseStream) -> syn::Result<Vec<XmlAttrib
 
 fn parse_attribute(input: syn::parse::ParseStream) -> syn::Result<XmlAttribute> {
     let (value, value_is_ref);
-    let (name, mut name_is_ref, _) = input.call(|s|parse_str(s, None))?;
+    let (name, mut name_is_ref) = input.call(|s|parse_str(s, None))?;
 
     if !input.peek(Token![=]) {
         value = name.clone();
@@ -118,7 +114,7 @@ fn parse_attribute(input: syn::parse::ParseStream) -> syn::Result<XmlAttribute> 
         name_is_ref = false;
     } else {
         input.parse::<Token![=]>()?;
-        (value, value_is_ref, _) = input.call(|s|parse_str(s, None))?;
+        (value, value_is_ref) = input.call(|s|parse_str(s, None))?;
     }
 
     Ok(XmlAttribute {
@@ -129,17 +125,25 @@ fn parse_attribute(input: syn::parse::ParseStream) -> syn::Result<XmlAttribute> 
     })
 }
 
-fn parse_str(input: syn::parse::ParseStream, expected_style: Option<XmlDocStyle>) -> syn::Result<(String, bool, Span)> {
+fn parse_str(input: syn::parse::ParseStream, expected_style: Option<XmlDocStyle>) -> syn::Result<(String, bool)> {
     if input.peek(Token![#]) && (expected_style.is_none() || expected_style == Some(XmlDocStyle::Ref)) {
-        let pound = input.parse::<Token![#]>()?;
+        input.parse::<Token![#]>()?;
         let name: Ident = input.parse()?;
-        Ok((name.to_string(), true, pound.span))
+        Ok((name.to_string(), true))
     } else if input.peek(Ident) && (expected_style.is_none() || expected_style == Some(XmlDocStyle::Name)) {
         let ident: Ident = input.parse()?;
-        Ok((ident.to_string(), false, ident.span()))
+        let mut name = ident.to_string();
+
+        if input.peek(Token![-]) {
+            input.parse::<Token![-]>()?;
+            let ident: Ident = input.parse()?;
+            name = format!("{}-{}", name, ident);
+        }
+
+        Ok((name, false))
     } else if input.peek(LitStr) && (expected_style.is_none() || expected_style == Some(XmlDocStyle::Name)) {
         let lit: LitStr = input.parse()?;
-        Ok((lit.value(), false, lit.span()))
+        Ok((lit.value(), false))
     } else {
         if let Some(style) = expected_style {
             return match style {
@@ -164,11 +168,11 @@ fn parse_children(input: syn::parse::ParseStream) -> syn::Result<Vec<XmlDocChild
                 input.parse::<Token![#]>()?;
                 let content;
                 parenthesized!(content in input);
-                let (iter, _, _) = parse_str(&content, Some(XmlDocStyle::Ref))?;
+                let (iter, _) = parse_str(&content, Some(XmlDocStyle::Ref))?;
                 res.push(XmlDocChild::Repeat(iter));
                 input.parse::<Token![*]>()?;
             } else {
-                let (item, is_ref, _) = parse_str(input, None)?;
+                let (item, is_ref) = parse_str(input, None)?;
                 res.push(XmlDocChild::Raw{ value: item, is_ref });
             }
         } else {
