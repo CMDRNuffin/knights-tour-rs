@@ -8,10 +8,13 @@ mod node;
 mod node_ref;
 mod move_graph_data;
 mod nodes_iterator;
+mod print_move;
 pub use node::Node;
 pub use node_ref::NodeRef;
 use move_graph_data::MoveGraphData;
 pub use nodes_iterator::NodesIterator;
+
+use crate::print_move;
 
 #[derive(Clone)]
 pub struct MoveGraph<'a> {
@@ -105,17 +108,19 @@ impl<'a> MoveGraph<'a> {
     }
 
     pub fn to_board(self) -> Board {
-        let mut board = Board::new(self.width, self.height, 0);
+        let dead_squares = self.nodes.into_iter().filter_map(|node| {
+            let pos = node.pos();
+            if node.next().is_none() && node.prev().is_none() {
+                Some(pos)
+            }
+            else {
+                None
+            }
+        }).collect();
+
+        let mut board = Board::new(self.width, self.height, 0).with_dead_squares(dead_squares);
         let pos = BoardPos::new(0, 0);
         let mut node = self.node(pos);
-
-        macro_rules! print_move {
-            ($index:expr => $prev:expr, $pos:expr, $next:expr) => {
-                let prev = $prev.map(|pos| pos.to_string()).unwrap_or_else(|| "".to_string());
-                let next = $next.map(|pos| pos.to_string()).unwrap_or_else(|| "".to_string());
-                dprintln!("{}: {} ({} -> {})", $index, $pos, prev, next);
-            };
-        }
 
         // find first node in the chain (or self.nodes[0].next in case of a cycle)
         while let Some(prev_pos) = node.prev() {

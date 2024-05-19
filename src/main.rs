@@ -10,7 +10,7 @@ mod move_graph;
 mod svg;
 
 use args::Args;
-use clap::Parser;
+use std::io::Write;
 
 pub mod aliases {
     // aliases for the board index type
@@ -32,7 +32,7 @@ fn main() {
         debug_output::enable();
     }
 
-    let solve = if args.use_warnsdorff {
+    let solve = if args.input.use_warnsdorff {
         // cannot solve with divide and conquer if the field is not rectangular
         warnsdorff::solve
     } else {
@@ -40,19 +40,54 @@ fn main() {
     };
 
     let quiet = args.quiet;
-    let (elapsed, board) = if let Some(res) = solve(args) {
+    let output_options = (args.output_file, args.output_format);
+    let (elapsed, board) = if let Some(res) = solve(args.input) {
         res
     } else {
         println!("No solution possible for this board configuration");
         return;
     };
 
+    let out_format = match output_options.0 {
+        None => args::OutputFormat::Text,
+        Some(_) => match output_options.1 {
+            args::OutputFormat::Auto => {
+                let ext = output_options.0.as_ref()
+                    .map(|s|s.extension().map(|s|s.to_str()))
+                    .flatten()
+                    .flatten()
+                    .unwrap_or("")
+                    .to_lowercase();
+
+                match &ext as &str {
+                    "svg" => args::OutputFormat::Svg,
+                    _ => args::OutputFormat::Text,
+                }
+            },
+            other => other,
+        },
+    };
+
+    let elapsed_text = format!("Elapsed time: {}.{:03} seconds", elapsed.as_secs(), elapsed.subsec_millis());
     if !quiet {
-        let writer = std::io::stdout();
-        svg::render_svg(&mut writer.lock(), &board, elapsed).unwrap();
-        println!("<!-- Elapsed time: {}.{:03} seconds -->", elapsed.as_secs(), elapsed.subsec_millis());
-    }
-    else {
-        println!("Elapsed time: {}.{:03} seconds", elapsed.as_secs(), elapsed.subsec_millis());
+        let mut writer: Box<dyn Write> = if let Some(file) = output_options.0 {
+            Box::new(std::fs::File::create(file).unwrap())
+        } else {
+            Box::new(std::io::stdout())
+        };
+
+        match out_format {
+            args::OutputFormat::Text => {
+                writeln!(writer, "{}", board.to_board()).unwrap();
+                writeln!(writer, "{}", elapsed_text).unwrap();
+            },
+            args::OutputFormat::Svg => {
+                svg::render_svg(&mut writer, &board, elapsed).unwrap();
+                writeln!(writer, "<!-- {} -->", elapsed_text).unwrap();
+            },
+            args::OutputFormat::Auto => unreachable!(),
+        }
+    } else {
+        println!("{}", elapsed_text);
     }
 }

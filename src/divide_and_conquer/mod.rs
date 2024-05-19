@@ -1,10 +1,10 @@
 use std::{mem::replace, time::{Duration, Instant}};
 
 use crate::{
-    aliases::BoardIndex as Idx, args::Args, board_pos::{BoardPos, BPO}, board_size::BoardSize, dprintln, move_graph::{Direction, MoveGraph, Node}, warnsdorff::{self, Mode, StructureMode}
+    aliases::BoardIndex as Idx, args::InputArgs, board_pos::{BoardPos, BPO}, board_size::BoardSize, dprintln, move_graph::{Direction, MoveGraph, Node}, warnsdorff::{self, Mode, StructureMode}
 };
 
-pub fn solve<'a>(args: Args) -> Option<(Duration, MoveGraph<'a>)> {
+pub fn solve<'a>(args: InputArgs) -> Option<(Duration, MoveGraph<'a>)> {
     // algorithm shamelessly stolen from https://www.sciencedirect.com/science/article/pii/S0166218X04003488
     // if live squares % 2 == 1, then we can't have a closed tour
 

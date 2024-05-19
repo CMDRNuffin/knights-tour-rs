@@ -3,7 +3,7 @@ use std::{collections::{HashMap, HashSet}, hash::Hash, path::PathBuf, sync::Once
 use crate::{
     aliases::BoardIndex as Idx,
     board_size::BoardSize,
-    args::Args,
+    args::InputArgs,
     board_pos::BoardPos,
     move_graph::{Direction, MoveGraph},
     dprint,
@@ -14,13 +14,13 @@ use crate::{
 mod move_tracker;
 use move_tracker::MoveTracker;
 
-pub fn solve<'a>(args: Args) -> Option<(Duration, MoveGraph<'a>)> {
+pub fn solve<'a>(args: InputArgs) -> Option<(Duration, MoveGraph<'a>)> {
     let result = solve_internal_impl(args.board_size?.into(), Mode::Basic(args))?;
     Some((result.1, result.0))
 }
 
 pub enum Mode {
-    Basic(Args),
+    Basic(InputArgs),
     Structured(StructureMode),
     Freeform,
 }
@@ -391,7 +391,7 @@ impl<'a> ReachabilityChecker<'a> {
     }
 }
 
-fn populate_dead_squares(dead_squares: &mut HashSet<BoardPos>, args: &Args) -> bool {
+fn populate_dead_squares(dead_squares: &mut HashSet<BoardPos>, args: &InputArgs) -> bool {
     if let Some(ref path) = args.warnsdorff.as_ref().unwrap().board_file {
         populate_dead_squares_from_file(dead_squares, path, args)
     }
@@ -401,7 +401,7 @@ fn populate_dead_squares(dead_squares: &mut HashSet<BoardPos>, args: &Args) -> b
     }
 }
 
-fn populate_dead_squares_from_corner_radius(dead_squares: &mut HashSet<BoardPos>, args: &Args) {
+fn populate_dead_squares_from_corner_radius(dead_squares: &mut HashSet<BoardPos>, args: &InputArgs) {
     let radius = if let Some(radius) = args.warnsdorff.as_ref().unwrap().corner_radius { radius } else { return };
     let size = args.board_size.unwrap();
     let w = size.width();
@@ -417,7 +417,7 @@ fn populate_dead_squares_from_corner_radius(dead_squares: &mut HashSet<BoardPos>
 fn populate_dead_squares_from_file(
     _dead_squares: &mut HashSet<BoardPos>,
     _path: &PathBuf,
-    _args: &Args
+    _args: &InputArgs
 ) -> bool {
     todo!();
     //let file = File::open(path).expect("Failed to open file");
