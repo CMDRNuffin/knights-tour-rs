@@ -29,9 +29,9 @@ pub struct Args{
     #[arg(long, short = 'O', default_value = "auto", requires = "output_file")]
     pub output_format: OutputFormat,
 
-    /// If set, the program will print additional debug information
-    #[arg(long, short)]
-    pub verbose: bool,
+    /// If set, the program will print additional debug information. Specify up to three times for progressively more information
+    #[arg(long, short, action = ArgAction::Count)]
+    pub verbose: u8,
 }
 
 impl Args {

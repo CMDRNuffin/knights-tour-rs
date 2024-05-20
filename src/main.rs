@@ -28,9 +28,7 @@ pub mod aliases {
 fn main() {
     let args = Args::parse();
     
-    if args.verbose {
-        debug_output::enable();
-    }
+    debug_output::set(args.verbose);
 
     let solve = if args.input.use_warnsdorff {
         // cannot solve with divide and conquer if the field is not rectangular

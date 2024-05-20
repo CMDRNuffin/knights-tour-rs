@@ -3,7 +3,6 @@ use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board_s
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct BoardPos(Idx, Idx);
-pub struct BPO(pub Option<BoardPos>);
 
 impl From<(Idx, Idx)> for BoardPos {
     fn from(value: (Idx, Idx)) -> Self {
@@ -107,21 +106,6 @@ impl Display for BoardPos {
         let h = self.row() + 1;
 
         Display::fmt(&format!("{w}{h}"), f)
-    }
-}
-
-impl Display for BPO {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Some(pos) => Display::fmt(&pos, f),
-            None => write!(f, "None"),
-        }
-    }
-}
-
-impl Debug for BPO {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.0, f)
     }
 }
 

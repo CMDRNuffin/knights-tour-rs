@@ -1,41 +1,26 @@
-use std::{collections::{HashMap, HashSet}, hash::Hash, path::PathBuf, sync::OnceLock, time::{Duration, Instant}};
+use std::{collections::{HashMap, HashSet}, path::PathBuf, time::{Duration, Instant}};
 
 use crate::{
     aliases::BoardIndex as Idx,
-    board_size::BoardSize,
     args::InputArgs,
     board_pos::BoardPos,
-    move_graph::{Direction, MoveGraph},
+    board_size::BoardSize,
     dprint,
     dprintln,
     knight::Knight,
+    move_graph::{Direction, MoveGraph}
 };
 
+mod mode;
 mod move_tracker;
+mod cache;
 use move_tracker::MoveTracker;
+pub use mode::*;
+use cache::{get_stretched_cached, insert_stretched_cache};
 
 pub fn solve<'a>(args: InputArgs) -> Option<(Duration, MoveGraph<'a>)> {
     let result = solve_internal_impl(args.board_size?.into(), Mode::Basic(args))?;
     Some((result.1, result.0))
-}
-
-pub enum Mode {
-    Basic(InputArgs),
-    Structured(StructureMode),
-    Freeform,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum StructureMode {
-    Closed(bool),
-    Stretched(Direction),
-}
-
-static mut STRETCHED_CACHE: OnceLock<HashMap<(BoardSize, Direction), MoveGraph>> = OnceLock::new();
-
-fn get_stretched_cached<'a>(size: BoardSize, direction: Direction) -> Option<&'a MoveGraph<'a>> {
-    let cache = unsafe { STRETCHED_CACHE.get()? };
-    cache.get(&(size, direction))
 }
 
 pub fn solve_internal<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph<'a>, Duration)> {
@@ -122,7 +107,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
 
     let expected_move_count = (graph.width() * graph.height() - dead_squares.len() as Idx) as usize
         - if end_point.is_some() && end_point == Some(start_pos) { 0 } else { 1 };
-    dprintln!("Expected move count: {expected_move_count}.");
+    dprintln!(2 => "Expected move count: {expected_move_count}.");
 
     let mut moves = vec![ 0 ];
 
@@ -166,10 +151,10 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
 
             knight.update_position(next_move);
             move_tracker.push(next_move);
-            dprintln!("Move #{count}:");
-            dprintln!("{move_tracker}");
-            dprintln!("{graph:?}");
-            dprintln!();
+            dprintln!(3 => "Move #{count}:");
+            dprintln!(3 => "{move_tracker}");
+            dprintln!(3 => "{graph:?}");
+            dprintln!(3 => );
         } else if moves.len() > 1 {
             // undo the last move
             moves.pop();
@@ -185,17 +170,17 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
                 knight.update_position(prev_pos);
             }
             else {
-                dprintln!("Move #{count}: return from {}", knight.position());
-                dprintln!("{graph:?}");
-                dprintln!();
+                dprintln!(3 => "Move #{count}: return from {}", knight.position());
+                dprintln!(3 => "{graph:?}");
+                dprintln!(3 => );
 
                 panic!("No previous move found for {}!", knight.position());
             }
 
-            dprintln!("Move #{count}: return to {}", knight.position());
-            dprintln!("{move_tracker}");
-            dprintln!("{graph:?}");
-            dprintln!();
+            dprintln!(3 => "Move #{count}: return to {}", knight.position());
+            dprintln!(3 => "{move_tracker}");
+            dprintln!(3 => "{graph:?}");
+            dprintln!(3 => );
         }
         else {
             println!("No knight's tour possible for this board configuration.");
@@ -204,15 +189,10 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
     }
 
     if cache {
-        unsafe {
-            STRETCHED_CACHE.get_or_init(||HashMap::new());
-            let cache = STRETCHED_CACHE.get_mut().unwrap();
-        
-            cache.insert((size, direction), graph.clone());
-        }
+        insert_stretched_cache(size, direction, graph.clone());
     }
 
-    dprintln!("{graph:?}");
+    dprintln!(3 => "{graph:?}");
 
     let duration = now.elapsed();
     Some((graph, duration, dead_squares))
@@ -275,7 +255,7 @@ fn preconnect_corners(graph: &MoveGraph, mode: Mode, size: BoardSize) -> HashMap
         preconnect_end_point(&mut res, direction, size);
     }
 
-    dprintln!("Preconnected moves: {res:?}");
+    dprintln!(3 => "Preconnected moves: {res:?}");
 
     res
 }
@@ -322,21 +302,21 @@ struct ReachabilityChecker<'a>{
 
 impl<'a> ReachabilityChecker<'a> {
     fn reachable(&self, from: BoardPos, pos: BoardPos) -> bool {
-        dprint!("Move from {from} to {pos}: ");
+        dprint!(3 => "Move from {from} to {pos}: ");
         if let Some(target) = self.target {
-            dprintln!("trying to reach {target} -> {}", if pos == target { "true" } else { "false" });
+            dprintln!(3 => "trying to reach {target} -> {}", if pos == target { "true" } else { "false" });
             return pos == target;
         }
 
         if let Some(end_point) = self.end_point {
             if pos == end_point {
-                dprintln!("target square is end point -> false");
+                dprintln!(3 => "target square is end point -> false");
                 return false;
             }
         }
 
         if (from == pos) | (self.start == pos) {
-            dprintln!("target square is {} -> false", if from == pos { "current square" } else { "starting square" });
+            dprintln!(3 => "target square is {} -> false", if from == pos { "current square" } else { "starting square" });
             return false;
         }
 
@@ -344,7 +324,7 @@ impl<'a> ReachabilityChecker<'a> {
         if self.dead_squares.contains(&pos)
             | (size.width() <= pos.col())
             | (size.height() <= pos.row()) {
-            dprintln!("target square is out of bounds -> false");
+            dprintln!(3 => "target square is out of bounds -> false");
             return false;
         }
         
@@ -353,7 +333,7 @@ impl<'a> ReachabilityChecker<'a> {
         };
 
         if is_occupied(pos) {
-            dprintln!("target square is already visited -> false");
+            dprintln!(3 => "target square is already visited -> false");
             return false;
         }
 
@@ -365,14 +345,14 @@ impl<'a> ReachabilityChecker<'a> {
                 .collect();
             let len = next.len();
             if next.contains(&from) {
-                dprintln!("predetermined move -> true");
+                dprintln!(3 => "predetermined move -> true");
                 return true;
             } else if len > 1 {
-                dprintln!("unrelated square to the middle of two chained predetermined move {next:?} -> false");
+                dprintln!(3 => "unrelated square to the middle of two chained predetermined move {next:?} -> false");
                 return false;
             } else if let Some(end_point) = self.end_point {
                 if !self.move_to_end_allowed & next.contains(&end_point) {
-                    dprintln!("predetermined move to end point -> false");
+                    dprintln!(3 => "predetermined move to end point -> false");
                     return false;
                 }
             }
@@ -381,11 +361,11 @@ impl<'a> ReachabilityChecker<'a> {
         if let Some(prev) = self.predetermined_moves.get(&from) {
             let res = prev.iter().all(|pos|is_occupied(*pos));
             const BOOLS: [&str; 2] = ["false", "true"];
-            dprintln!("from a predetermined move {prev:?} -> {}", BOOLS[res as usize]);
+            dprintln!(3 => "from a predetermined move {prev:?} -> {}", BOOLS[res as usize]);
             res
         }
         else {
-            dprintln!("not part of a predetermined move whatsoever -> true");
+            dprintln!(3 => "not part of a predetermined move whatsoever -> true");
             true
         }
     }

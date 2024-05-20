@@ -54,9 +54,21 @@ impl<'a> Debug for MoveGraph<'a> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[repr(u8)]
 pub enum Direction {
     Horizontal,
     Vertical,
+}
+
+impl Direction {
+    pub fn from_bool(is_vertical: bool) -> Direction {
+        if is_vertical {
+            Self::Vertical
+        }
+        else {
+            Self::Horizontal
+        }
+    }
 }
 
 impl<'a> MoveGraph<'a> {
@@ -125,11 +137,11 @@ impl<'a> MoveGraph<'a> {
         // find first node in the chain (or self.nodes[0].next in case of a cycle)
         while let Some(prev_pos) = node.prev() {
             if prev_pos == pos {
-                dprintln!("Cycle detected at {pos}!");
+                dprintln!(2 => "Cycle detected at {pos}!");
                 break;
             }
 
-            dprintln!("Going back one {} -> {}!", pos, prev_pos);
+            dprintln!(3 => "Going back one {} -> {}!", pos, prev_pos);
             node = self.node(prev_pos);
         }
 
@@ -156,7 +168,7 @@ impl<'a> MoveGraph<'a> {
             i += 1;
         }
 
-        dprintln!("i = {}", i);
+        dprintln!(3 => "i = {}", i);
 
         board
     }

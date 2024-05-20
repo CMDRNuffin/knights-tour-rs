@@ -8,14 +8,14 @@ pub struct MoveTracker{
 
 impl MoveTracker{
     pub fn new(capacity: usize) -> Self{
-        let capacity = if debug_output::is_enabled() { capacity } else { 0 };
+        let capacity = if debug_output::is_enabled(3) { capacity } else { 0 };
         MoveTracker{
             data: Vec::with_capacity(capacity)
         }
     }
 
     pub fn push(&mut self, pos: BoardPos){
-        if debug_output::is_enabled() {
+        if debug_output::is_enabled(3) {
             self.data.push(pos);
         }
     }

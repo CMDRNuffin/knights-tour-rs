@@ -56,7 +56,7 @@ impl Knight {
             )
         };
 
-        dprintln!("{} -> {} moves", self.position, move_count);
+        dprintln!(3 => "{} -> {} moves", self.position, move_count);
         move_count
     }
 }
