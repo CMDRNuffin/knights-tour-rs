@@ -74,10 +74,17 @@ fn divide_and_conquer_impl<'a>(size: BoardSize) -> Option<MoveGraph<'a>> {
 
     // todo: parallelize
     let partitions = partitions::partition_size(size);
+    // for sector in partitions.iter() {
+    //     eprintln!("{}: {} {:?}", sector.0, sector.1, sector.2);
+    // }
+
+    // panic!("end test");
+
     for sector in partitions.iter() {
-        let mode = match (sector.0.col(), sector.0.row()) {
-            (0, 0) => SolveQuadrantMode::Closed,
-            (x, y) => SolveQuadrantMode::Stretched(Direction::from_bool(x <= y)),
+        let mode = if sector.0 == BoardPos::ZERO {
+            SolveQuadrantMode::Closed
+        } else {
+            SolveQuadrantMode::Stretched(sector.2)
         };
 
         divide_and_conquer_impl_board(&mut graph, sector.0, sector.1, mode)?;
@@ -86,7 +93,7 @@ fn divide_and_conquer_impl<'a>(size: BoardSize) -> Option<MoveGraph<'a>> {
     for sector in partitions.iter() {
         let direction = match (sector.0.col(), sector.0.row()) {
             (0, 0) => continue,
-            (x, y) => Direction::from_bool(x <= y),
+            (_, _) => sector.2,
         };
 
         merge::merge(&mut graph, sector.0, sector.1, direction);

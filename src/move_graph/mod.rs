@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Not};
 
 use crate::{
     aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board::{matrix2d::Matrix2D, Board}, board_pos::BoardPos, board_size::BoardSize, dprintln
@@ -68,6 +68,29 @@ impl Direction {
         else {
             Self::Horizontal
         }
+    }
+
+    pub fn opposite(self) -> Self {
+        match self {
+            Self::Horizontal => Self::Vertical,
+            Self::Vertical => Self::Horizontal,
+        }
+    }
+
+    pub fn is_vertical(self) -> bool {
+        matches!(self, Self::Vertical)
+    }
+
+    pub fn is_horizontal(self) -> bool {
+        matches!(self, Self::Horizontal)
+    }
+}
+
+impl Not for Direction {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        self.opposite()
     }
 }
 

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, vec};
 
 use crate::{
     aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath},
@@ -6,10 +6,10 @@ use crate::{
     board_pos::BoardPos
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Matrix2D<T>
-where T: Clone {
-    data: Box<[Box<[T]>]>,
+where T: 'static + Clone {
+    data: Box<[&'static mut [T]]>,
     w: Idx,
     h: Idx,
 }
@@ -18,15 +18,30 @@ impl<T> Matrix2D<T>
 where T: Clone
 {
     pub fn new(w: Idx, h: Idx, f: impl Fn() -> T) -> Self {
-        let data = make_slice(w, &|| make_slice(h, &f));
+        let base_vec = vec![f(); w as usize * h as usize];
+        let data = Self::split_buffer(w, h, base_vec);
         Matrix2D { data, w, h, }
     }
 
     pub fn map<R>(self, mut f: impl FnMut(&T) -> R) -> Matrix2D<R>
     where R: Clone
     {
-        let data = self.data.into_iter().map(|col| col.into_iter().map(|node| f(node)).collect()).collect();
+        let mut base_vec = Vec::with_capacity(self.w as usize * self.h as usize);
+        for row in self.data.iter() {
+            for node in row.iter() {
+                base_vec.push(f(node));
+            }
+        }
+
+        let data = Self::split_buffer(self.w, self.h, base_vec);
         Matrix2D { data, w: self.w, h: self.h }
+    }
+
+    fn split_buffer<X>(_width: Idx, height: Idx, base_vec: Vec<X>) -> Box<[&'static mut[X]]>
+    where X: Clone + 'static
+    {
+        let parts: Vec<_> = base_vec.leak().chunks_mut(height as usize).collect();
+        parts.into_boxed_slice()
     }
 
     pub fn at(&self, pos: BoardPos) -> &T {
@@ -54,8 +69,23 @@ where T: Clone
     }
 }
 
+impl<T> Clone for Matrix2D<T>
+where T: 'static + Clone {
+    fn clone(&self) -> Self {
+        let mut base_vec = Vec::with_capacity(self.w as usize * self.h as usize);
+        for row in self.data.iter() {
+            for node in row.iter() {
+                base_vec.push(node.clone());
+            }
+        }
+        
+        let data = Self::split_buffer(self.w, self.h, base_vec);
+        Matrix2D { data, w: self.w, h: self.h }
+    }
+}
+
 pub struct Matrix2DIterator<'a, T>
-where T: Clone {
+where T: 'static + Clone {
     matrix: &'a Matrix2D<T>,
     col: Idx,
     row: Idx,
@@ -144,16 +174,4 @@ where T: Display + Copy {
         }
         Ok(())
     }
-}
-
-fn make_slice<T, F>(len: Idx, f: &F) -> Box<[T]>
-where F: Fn() -> T {
-    let mut slice = Vec::<T>::with_capacity(len as usize);
-    let mut idx = 0;
-    slice.resize_with(len as usize, ||{
-        let r = f();
-        idx += 1;
-        r
-    });
-    slice.into_boxed_slice()
 }

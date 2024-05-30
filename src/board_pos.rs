@@ -1,5 +1,5 @@
 use std::{fmt::{Debug, Display}, ops::{Add, Sub}};
-use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board_size::BoardSize};
+use crate::{aliases::{BoardIndex as Idx, BoardIndexOverflow as IdxMath}, board_size::BoardSize, move_graph::Direction};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct BoardPos(Idx, Idx);
@@ -63,6 +63,10 @@ impl BoardPos {
 
     pub fn row(&self) -> Idx {
         self.1
+    }
+
+    pub fn merge_direction(self) -> Direction {
+        Direction::from_bool(self.col() <= self.row())
     }
 
     pub fn is_knight_move(&self, other: BoardPos) -> bool {

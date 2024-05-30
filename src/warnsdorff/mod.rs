@@ -103,7 +103,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
     *graph.node_mut(start_pos).prev_mut() = Some(start_pos); // mark start as visited and start
     let mut knight = Knight::new(start_pos);
 
-    let predetermined_moves = preconnect_corners(&graph, mode, size);
+    let predetermined_moves = preconnect_corners(&graph, &mode, size);
 
     let expected_move_count = (graph.width() * graph.height() - dead_squares.len() as Idx) as usize
         - if end_point.is_some() && end_point == Some(start_pos) { 0 } else { 1 };
@@ -183,7 +183,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
             dprintln!(3 => );
         }
         else {
-            println!("No knight's tour possible for this board configuration.");
+            println!("No knight's tour possible for this board configuration ({size} {mode}).");
             break;
         }
     }
@@ -198,7 +198,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
     Some((graph, duration, dead_squares))
 }
 
-fn preconnect_corners(graph: &MoveGraph, mode: Mode, size: BoardSize) -> HashMap<BoardPos, Vec<BoardPos>> {
+fn preconnect_corners(graph: &MoveGraph, mode: &Mode, size: BoardSize) -> HashMap<BoardPos, Vec<BoardPos>> {
     let top_left = match mode {
         Mode::Basic(_) => return HashMap::new(),
         Mode::Structured(StructureMode::Closed(skip_corner)) => {
@@ -252,7 +252,7 @@ fn preconnect_corners(graph: &MoveGraph, mode: Mode, size: BoardSize) -> HashMap
     }
 
     if let Some(direction) = top_left.2 {
-        preconnect_end_point(&mut res, direction, size);
+        preconnect_end_point(&mut res, *direction, size);
     }
 
     dprintln!(3 => "Preconnected moves: {res:?}");
