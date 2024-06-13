@@ -65,6 +65,10 @@ impl BoardPos {
         self.1
     }
 
+    pub fn flip(self) -> Self {
+        Self::new(self.row(), self.col())
+    }
+
     pub fn merge_direction(self) -> Direction {
         Direction::from_bool(self.col() <= self.row())
     }

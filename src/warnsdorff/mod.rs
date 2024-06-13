@@ -16,15 +16,15 @@ mod move_tracker;
 mod cache;
 use move_tracker::MoveTracker;
 pub use mode::*;
-use cache::{get_stretched_cached, insert_stretched_cache};
+pub use cache::{get_stretched_cached, insert_stretched_cache};
 
 pub fn solve<'a>(args: InputArgs) -> Option<(Duration, MoveGraph<'a>)> {
-    let result = solve_internal_impl(args.board_size?.into(), Mode::Basic(args))?;
+    let result = solve_internal_impl(args.board_size, Mode::Basic(args))?;
     Some((result.1, result.0))
 }
 
 pub fn solve_internal<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph<'a>, Duration)> {
-    solve_internal_impl(size, mode).map(|(graph, duration, _)|(graph, duration))
+    solve_internal_impl(Some(size), mode).map(|(graph, duration, _)|(graph, duration))
 }
 
 struct SolveParams {
@@ -33,9 +33,10 @@ struct SolveParams {
     pos: BoardPos,
     cache: bool,
     direction: Direction,
+    size: BoardSize
 }
 
-fn parse_mode(mode: &Mode) -> Option<SolveParams> {
+fn parse_mode(mode: &Mode, mut size: Option<BoardSize>) -> Option<SolveParams> {
     let end_point;
     let mut dead_squares = HashSet::new();
     let pos;
@@ -44,11 +45,9 @@ fn parse_mode(mode: &Mode) -> Option<SolveParams> {
     match mode {
         Mode::Basic(ref args) => {
             end_point = None;
-            if !populate_dead_squares(&mut dead_squares, &args) {
-                return None;
-            }
+            size = Some(populate_dead_squares(&mut dead_squares, &args)?);
 
-            pos = args.warnsdorff.as_ref().unwrap().starting_pos.unwrap().into();
+            pos = args.warnsdorff.as_ref().map(|w|w.starting_pos).flatten().unwrap_or(BoardPos::ZERO);
             cache = false;
         },
         Mode::Structured(StructureMode::Closed(skip_corner)) => {
@@ -80,22 +79,32 @@ fn parse_mode(mode: &Mode) -> Option<SolveParams> {
         end_point,
         pos,
         cache,
-        direction
+        direction,
+        size: size?,
     })
 }
 
-pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph<'a>, Duration, HashSet<BoardPos>)> {
+pub fn solve_internal_impl<'a>(size: Option<BoardSize>, mode: Mode) -> Option<(MoveGraph<'a>, Duration, HashSet<BoardPos>)> {
     let SolveParams {
         dead_squares,
         end_point,
         pos: start_pos,
         cache,
-        direction
-    } = parse_mode(&mode)?;
+        direction,
+        size
+    } = parse_mode(&mode, size)?;
 
     if cache {
         if let Some(cached) = get_stretched_cached(size, direction) {
             return Some((MoveGraph::ref_to(cached), Duration::ZERO, HashSet::new()));
+        }
+
+        if let Some(cached) = get_stretched_cached(size.flip(), direction.opposite()) {
+            let now = Instant::now();
+            let result = cached.flip();
+            let duration = now.elapsed();
+            insert_stretched_cache(size, direction, result);
+            return Some((MoveGraph::ref_to(get_stretched_cached(size, direction).unwrap()), duration, HashSet::new()));
         }
     }
 
@@ -198,7 +207,7 @@ pub fn solve_internal_impl<'a>(size: BoardSize, mode: Mode) -> Option<(MoveGraph
     Some((graph, duration, dead_squares))
 }
 
-fn preconnect_corners(graph: &MoveGraph, mode: &Mode, size: BoardSize) -> HashMap<BoardPos, Vec<BoardPos>> {
+fn preconnect_corners(graph: &MoveGraph, mode: &Mode, size: BoardSize) -> HashMap<BoardPos, HashSet<BoardPos>> {
     let top_left = match mode {
         Mode::Basic(_) => return HashMap::new(),
         Mode::Structured(StructureMode::Closed(skip_corner)) => {
@@ -214,13 +223,13 @@ fn preconnect_corners(graph: &MoveGraph, mode: &Mode, size: BoardSize) -> HashMa
     let w = [1,-1, 1];
     let h = [1, 1, -1];
 
-    let mut res: HashMap<BoardPos, Vec<BoardPos>> = HashMap::new();
+    let mut res: HashMap<BoardPos, HashSet<BoardPos>> = HashMap::new();
     let mut add = |from: BoardPos, to: BoardPos| {
         if let Some(ref mut vec) = res.get_mut(&from) {
-            vec.push(to);
+            vec.insert(to);
         }
         else {
-            res.insert(from, vec![to]);
+            res.insert(from, vec![to].iter().copied().collect());
         }
     };
 
@@ -260,7 +269,7 @@ fn preconnect_corners(graph: &MoveGraph, mode: &Mode, size: BoardSize) -> HashMa
     res
 }
 
-fn preconnect_end_point(preconnected_corners: &mut HashMap<BoardPos, Vec<BoardPos>>, direction: Direction, size: BoardSize) {
+fn preconnect_end_point(preconnected_corners: &mut HashMap<BoardPos, HashSet<BoardPos>>, direction: Direction, size: BoardSize) {
     let half_size = size.width().max(size.height()) / 2;
     let half_size = half_size.min(size.width()).min(size.height());
 
@@ -277,8 +286,8 @@ fn preconnect_end_point(preconnected_corners: &mut HashMap<BoardPos, Vec<BoardPo
     let mut prev = start;
     loop {
         if let Some(next) = prev.try_translate(offset.0, offset.1) {
-            preconnected_corners.entry(prev).or_insert_with(Vec::new).push(next);
-            preconnected_corners.entry(next).or_insert_with(Vec::new).push(prev);
+            preconnected_corners.entry(prev).or_insert_with(HashSet::new).insert(next);
+            preconnected_corners.entry(next).or_insert_with(HashSet::new).insert(prev);
             prev = next;
             if prev.col() >= half_size && prev.row() >= half_size {
                 break;
@@ -295,7 +304,7 @@ struct ReachabilityChecker<'a>{
     end_point: Option<BoardPos>,
     dead_squares: &'a HashSet<BoardPos>,
     graph: &'a MoveGraph<'a>,
-    predetermined_moves: &'a HashMap<BoardPos, Vec<BoardPos>>,
+    predetermined_moves: &'a HashMap<BoardPos, HashSet<BoardPos>>,
     start: BoardPos,
     move_to_end_allowed: bool
 }
@@ -371,18 +380,18 @@ impl<'a> ReachabilityChecker<'a> {
     }
 }
 
-fn populate_dead_squares(dead_squares: &mut HashSet<BoardPos>, args: &InputArgs) -> bool {
-    if let Some(ref path) = args.warnsdorff.as_ref().unwrap().board_file {
+fn populate_dead_squares(dead_squares: &mut HashSet<BoardPos>, args: &InputArgs) -> Option<BoardSize> {
+    if let Some(ref path) = args.warnsdorff.as_ref().map(|w|w.board_file.as_ref()).flatten() {
         populate_dead_squares_from_file(dead_squares, path, args)
     }
     else {
         populate_dead_squares_from_corner_radius(dead_squares, args);
-        true
+        args.board_size
     }
 }
 
 fn populate_dead_squares_from_corner_radius(dead_squares: &mut HashSet<BoardPos>, args: &InputArgs) {
-    let radius = if let Some(radius) = args.warnsdorff.as_ref().unwrap().corner_radius { radius } else { return };
+    let radius = if let Some(radius) = args.warnsdorff.as_ref().map(|w|w.corner_radius.as_ref()).flatten() { radius } else { return };
     let size = args.board_size.unwrap();
     let w = size.width();
     let h = size.height();
@@ -398,7 +407,7 @@ fn populate_dead_squares_from_file(
     _dead_squares: &mut HashSet<BoardPos>,
     _path: &PathBuf,
     _args: &InputArgs
-) -> bool {
+) -> Option<BoardSize> {
     todo!();
     //let file = File::open(path).expect("Failed to open file");
 }

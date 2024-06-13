@@ -276,4 +276,15 @@ impl<'a> MoveGraph<'a> {
             }
         }
     }
+
+    pub fn flip(&self) -> Self {
+        let mut res = Self::new(self.height, self.width);
+        for node in self.nodes() {
+            let res_node = res.node_mut(node.pos().flip());
+            *res_node.next_mut() = node.next().map(|p|p.flip());
+            *res_node.prev_mut() = node.prev().map(|p|p.flip());
+        }
+
+        res
+    }
 }

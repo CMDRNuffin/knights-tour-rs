@@ -11,6 +11,7 @@ use crate::{
 
 mod merge;
 mod partitions;
+mod bases;
 
 pub fn solve<'a>(args: InputArgs) -> Option<(Duration, MoveGraph<'a>)> {
     // algorithm shamelessly stolen from https://www.sciencedirect.com/science/article/pii/S0166218X04003488
@@ -114,11 +115,18 @@ fn divide_and_conquer_impl_board<'a, 'b>(move_graph: &'b mut MoveGraph<'a>, offs
                 _ => return None,
             }
         },
-        SolveQuadrantMode::Stretched(direction) => Mode::Structured(StructureMode::Stretched(direction)),
+        SolveQuadrantMode::Stretched(direction) => {
+            if let Some(base) = bases::get(direction, size) {
+                move_graph.insert_section(base, offset);
+                return Some(());
+            }
+
+            Mode::Structured(StructureMode::Stretched(direction))
+        },
     };
 
     let (graph, _) = warnsdorff::solve_internal(size.into(), solver_mode)?;
-    
+
     move_graph.insert_section(&graph, offset);
     return Some(());
 }

@@ -26,6 +26,10 @@ impl BoardSize {
     pub fn height(&self) -> Idx {
         self.height
     }
+
+    pub fn flip(self) -> Self {
+        Self::new(self.height(), self.width())
+    }
     
     pub fn new(w: Idx, h: Idx) -> BoardSize {
         BoardSize { width: w, height: h }
