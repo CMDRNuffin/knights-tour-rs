@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet}, path::PathBuf, time::{Duration, Instant}};
+use std::{collections::{HashMap, HashSet}, error::Error, io::BufRead, path::PathBuf, time::{Duration, Instant}};
 
 use crate::{
     aliases::BoardIndex as Idx,
-    args::InputArgs,
+    args::{BoardFileType, ImageMode, InputArgs},
     board_pos::BoardPos,
     board_size::BoardSize,
     dprint,
@@ -17,6 +17,7 @@ mod cache;
 use move_tracker::MoveTracker;
 pub use mode::*;
 pub use cache::{get_stretched_cached, insert_stretched_cache};
+use image::{Rgba, GenericImageView};
 
 pub fn solve<'a>(args: InputArgs) -> Option<(Duration, MoveGraph<'a>)> {
     let result = solve_internal_impl(args.board_size, Mode::Basic(args))?;
@@ -404,10 +405,99 @@ fn populate_dead_squares_from_corner_radius(dead_squares: &mut HashSet<BoardPos>
 }
 
 fn populate_dead_squares_from_file(
-    _dead_squares: &mut HashSet<BoardPos>,
-    _path: &PathBuf,
-    _args: &InputArgs
+    dead_squares: &mut HashSet<BoardPos>,
+    path: &PathBuf,
+    args: &InputArgs
 ) -> Option<BoardSize> {
-    todo!();
-    //let file = File::open(path).expect("Failed to open file");
+    let warnsdorff = args.warnsdorff.as_ref()?;
+    let board_file_format = if let Some(ff) = warnsdorff.board_file_format {
+        ff
+    } else {
+        match path.extension() {
+            Some(osstr) if osstr.eq_ignore_ascii_case("txt") => { BoardFileType::Text },
+            Some(osstr) if image::ImageFormat::from_extension(osstr).is_some() => { BoardFileType::Image },
+            _ => {
+                eprintln!("Unknown file type. Please provide the board file type explicitly.");
+                return None;
+            }
+        }
+    };
+
+    match board_file_format {
+        BoardFileType::Text => populate_dead_squares_from_text_file(dead_squares, path),
+        BoardFileType::Image => populate_dead_squares_from_image_file(
+            dead_squares,
+            path,
+            warnsdorff.image_mode.unwrap(),
+            warnsdorff.threshold.unwrap_or(128)
+        ).map(|s|Some(s)).unwrap_or(None),
+    }
+}
+
+fn populate_dead_squares_from_text_file(dead_squares: &mut HashSet<BoardPos>, path: &PathBuf) -> Option<BoardSize> {
+    let file = std::fs::File::open(path).map(|f|Some(f)).unwrap_or(None)?;
+    let mut lines = Vec::new();
+    let mut max_len = 0;
+    for line in std::io::BufReader::new(file).lines() {
+        let str = line.map(|f|Some(f)).unwrap_or(None)?;
+        max_len =max_len.max(str.len());
+        lines.push(str);
+    }
+
+    let size = BoardSize::new(max_len as Idx, lines.len() as Idx);
+    let mut row = 0;
+    for line in lines {
+        let mut col = 0;
+        for ch in line.chars() {
+            if ch.is_whitespace() || ch.is_control() {
+                dead_squares.insert(BoardPos::new(col, row));
+            }
+
+            col += 1;
+        }
+
+        while (col as usize) < max_len {
+            dead_squares.insert(BoardPos::new(col, row));
+            col += 1;
+        }
+
+        row += 1;
+    }
+
+    Some(size)
+}
+
+fn populate_dead_squares_from_image_file(dead_squares: &mut HashSet<BoardPos>, path: &PathBuf, image_mode: ImageMode, threshold: u8) -> Result<BoardSize, Box<dyn Error + 'static>> {
+    let image = image::open(path)?;
+
+    for (x, y, pixel) in image.pixels() {
+        let visible = match image_mode {
+            ImageMode::Alpha => pixel.0[3] >= threshold,
+            ImageMode::BlackWhite =>  {
+                if pixel == Rgba([255, 255, 255, 255]) {
+                    false
+                } else if pixel == Rgba([0, 0, 0, 255]) {
+                    true
+                } else {
+                    return Err("Only black and white pixels are supported. Try the mode \"luminance\" or \"alpha\" instead.".into());
+                }
+            },
+            ImageMode::Luminance => {
+                let [r, g, b, _] = pixel.0;
+                let (r, g, b) = (r as u16, g as u16, b as u16);
+                let r = r * 30;
+                let g = g * 59;
+                let b = b * 11;
+                let sum = r + g + b;
+                let lum = (sum / 100) as u8;
+                lum >= threshold
+            },
+        };
+
+        if visible {
+            dead_squares.insert(BoardPos::new(x as Idx, y as Idx));
+        }
+    }
+
+    Ok(BoardSize::new(image.width() as Idx, image.height() as Idx))
 }

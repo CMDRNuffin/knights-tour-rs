@@ -1,13 +1,16 @@
 use std::path::PathBuf;
 
 use clap::{*, builder::*};
+use error::ErrorKind;
 
-use crate::{board::corner_radius::CornerRadius, board_pos::{BoardPos, parse_board_pos}};
+use crate::{board::corner_radius::CornerRadius, board_pos::{parse_board_pos, BoardPos}};
 
 use crate::board_size::{parse_board_size, BoardSize};
 
+// todo maybe: add "invert image" option to swap accessible and inaccessible squares
+
 /// Calculates a knight's tour on a board of the given size with the provided dimensions and starting position.
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Debug)]
 pub struct Args{
     #[command(flatten)]
     pub input: InputArgs,
@@ -42,11 +45,25 @@ impl Args {
             .group(ArgGroup::new("warnsdorff_base").args(vec!["use_warnsdorff", "board_file"]).multiple(true));
         builder.build();
         let matches = builder.get_matches();
-        Self::from_arg_matches(&matches).unwrap()
+        let mut res = Self::from_arg_matches(&matches).unwrap();
+
+        if !res.input.use_warnsdorff && res.input.board_size.is_none() {
+            res.input.board_size = Some(BoardSize::new(8, 8));
+        }
+
+        if let Some(ref warnsdorff) = res.input.warnsdorff {
+            if warnsdorff.invert_image_mode && !matches!(warnsdorff.board_file_format, Some(BoardFileType::Image)) {
+                Command::new("")
+                    .error(ErrorKind::ArgumentConflict, "'--invert-image-mode' requires '--board-file-format' to be 'image'.")
+                    .exit();
+            }
+        }
+
+        res
     }
 }
 
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Debug)]
 pub struct InputArgs {
     /// If set, the program will use the Warnsdorff heuristic to calculate the knight's tour.
     /// Warning: This can take a long time for large boards.
@@ -63,7 +80,7 @@ pub struct InputArgs {
     pub board_size: Option<BoardSize>,
 }
 
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Debug)]
 pub struct Warnsdorff {
     /// The path to the file containing the board layout. See documentation for --board-file-format for more information
     /// 
@@ -74,7 +91,7 @@ pub struct Warnsdorff {
     /// If set, reads a board layout of the specified type from the file specified by --board-file:
     /// - text: a text file where spaces represent inaccessible squares and printable characters
     ///   represent accessible squares. The file should have either windows or linux line endings.
-    /// - image: a PNG image representing the board. Specify the mode via --image-mode:
+    /// - image: an image representing the board. Specify the mode via --image-mode:
     ///   - black-white: black pixels are accessible, white pixels are inaccessible, all other color
     ///     values are invalid
     ///   - alpha: the alpha channel is used to determine accessibility. Any pixel with an alpha value
@@ -82,7 +99,7 @@ pub struct Warnsdorff {
     ///     --threshold option is required
     ///   - luminance (DEFAULT): the luminance of each pixel is used to determine accessibility. If the
     ///     luminance is greater than or equal to THRESHOLD, the pixel is considered accessible. The
-    ///     default threshold is 128
+    ///     default threshold is 128. Ignores transparency, if present
     #[arg(
         long,
         short,
@@ -101,13 +118,16 @@ pub struct Warnsdorff {
     )]
     pub image_mode: Option<ImageMode>,
 
+    #[arg(long, short = 'I', requires = "board_file_format")]
+    pub invert_image_mode: bool,
+
     /// If set, the program will only consider squares with an alpha value greater than this threshold as accessible
     #[arg(
         short,
         long,
         requires = "image_mode",
         default_value_if("image_mode", ArgPredicate::Equals("luminance".into()), "128"),
-        required_if_eq_any([("image_mode", "alpha"),])
+        required_if_eq("image_mode", "alpha")
     )]
     pub threshold: Option<u8>,
 
@@ -142,8 +162,13 @@ pub enum OutputFormat {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum ImageMode {
+    /// Black pixels are accessible, white pixels are inaccessible, everything else is an error
     BlackWhite,
+
+    /// Alpha >= THRESHOLD is accessible
     Alpha,
+
+    /// Luminance >= THRESHOLD is accessible
     Luminance,
 }
 

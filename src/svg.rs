@@ -8,11 +8,19 @@ pub fn render_svg(writer: &mut impl Write, move_graph: &MoveGraph, duration: Dur
     const TITLE_BAR: usize = 20;
     const END_BORDER: usize = 1;
     let width = move_graph.width() as usize * 10 + END_BORDER;
-    let file_width = (width + 2 * MARGIN).max(250);
+    let mut file_width = (width + 2 * MARGIN).max(250);
     let height = move_graph.height() as usize * 10 + END_BORDER;
     let file_height = height + MARGIN + TITLE_BAR;
     let moves_iter = ConnectionsIter::new(move_graph, TITLE_BAR, MARGIN);
-    let duration = format!("💩 Elapsed time: {}.{:03} seconds 💩", duration.as_secs(), duration.subsec_millis());
+
+    let dur = (duration.as_secs(), duration.subsec_millis());
+    let duration = if dur == (0,0){
+        file_width = file_width.max(300);
+        format!("💩 Elapsed time: {}.{:06} seconds 💩", dur.0, duration.subsec_micros())
+    } else {
+        format!("💩 Elapsed time: {}.{:03} seconds 💩", dur.0, dur.1)
+    };
+
     svg! { writer =>
         <svg xmlns="http://www.w3.org/2000/svg" width=#file_width height=#file_height>
             <defs>

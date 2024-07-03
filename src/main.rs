@@ -66,7 +66,13 @@ fn main() {
         },
     };
 
-    let elapsed_text = format!("Elapsed time: {}.{:03} seconds", elapsed.as_secs(), elapsed.subsec_millis());
+    let dur = (elapsed.as_secs(), elapsed.subsec_millis());
+    let elapsed_text = if dur == (0,0){
+        format!("💩 Elapsed time: {}.{:06} seconds 💩", dur.0, elapsed.subsec_micros())
+    } else {
+        format!("💩 Elapsed time: {}.{:03} seconds 💩", dur.0, dur.1)
+    };
+
     if !quiet {
         let mut writer: Box<dyn Write> = if let Some(file) = output_options.0 {
             Box::new(std::fs::File::create(file).unwrap())
@@ -76,12 +82,12 @@ fn main() {
 
         match out_format {
             args::OutputFormat::Text => {
-                writeln!(writer, "{}", board.to_board()).unwrap();
                 writeln!(writer, "{}", elapsed_text).unwrap();
+                writeln!(writer).unwrap();
+                writeln!(writer, "{}", board.to_board()).unwrap();
             },
             args::OutputFormat::Svg => {
                 svg::render_svg(&mut writer, &board, elapsed).unwrap();
-                writeln!(writer, "<!-- {} -->", elapsed_text).unwrap();
             },
             args::OutputFormat::Auto => unreachable!(),
         }

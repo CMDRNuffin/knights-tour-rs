@@ -74,6 +74,10 @@ impl Display for Board {
                 if (!with_self || self.is_alive(pos)) || self.has_alive_neighbor(pos, neighbors) { "+" } else { " " }
             };
 
+            if is_after {
+                writeln!(f)?;
+            }
+
             for x in 0..size.width() {
                 let pos = BoardPos::new(x, row);
                 let vertical = if is_after { Neighbor::Bottom } else { Neighbor::Top };
@@ -87,12 +91,13 @@ impl Display for Board {
                 write!(f, "+")?;
             }
 
-            writeln!(f)?;
             Ok(())
         };
 
         border(f, 0, false)?;
         for row in 0..size.height() {
+            writeln!(f)?;
+
             for col in 0..size.width() {
                 let pos = BoardPos::new(col, row);
                 if self.is_alive(pos) || self.has_alive_neighbor(pos, vec![Neighbor::Left]){
@@ -117,7 +122,6 @@ impl Display for Board {
             if self.is_alive(BoardPos::new(size.width() - 1, row)) {
                 write!(f, "|")?;
             }
-            writeln!(f)?;
             border(f, row, true)?;
         }
         Ok(())
